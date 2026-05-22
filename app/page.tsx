@@ -1018,6 +1018,16 @@ function Dashboard({ data, period, setPeriod, setSelectedSale, deleteSale, updat
         <Panel title="Товары по прибыли"><ProductProfitChart items={data.productStats} /></Panel>
         <RightPanel data={data} />
       </section>
+
+      <section className="grid grid-cols-1 2xl:grid-cols-[1fr_1fr] gap-6">
+        <Panel title="Heatmap городов"><CityHeatmap items={data.cityStats} /></Panel>
+        <Panel title="Топ сотрудников"><TopEmployees items={data.kpi.slice(0, 6)} /></Panel>
+      </section>
+
+      <section className="grid grid-cols-1 2xl:grid-cols-[1.15fr_.85fr] gap-6">
+        <Panel title="График прибыли"><ProfitLineChart data={data.dayStats} /></Panel>
+        <Panel title="Динамика недели"><WeekDynamics data={data.dayStats} /></Panel>
+      </section>
     </div>
   );
 }
@@ -2311,6 +2321,111 @@ function ProductProfitChart({ items }) {
           <Bar dataKey="profit" name="Прибыль" radius={[0, 12, 12, 0]} fill="#8b5cf6" />
         </BarChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+function ProfitLineChart({ data }) {
+  return (
+    <div className="h-80 rounded-2xl bg-black/20 border border-white/10 p-3">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 20, right: 18, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="profitOnlyGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22c55e" stopOpacity={0.55} />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false} />
+          <XAxis dataKey="day" stroke="#94a3b8" tickLine={false} axisLine={false} />
+          <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}к`} />
+          <Tooltip content={<ChartTooltip />} />
+          <Area type="monotone" dataKey="profit" name="Прибыль" stroke="#22c55e" strokeWidth={4} fill="url(#profitOnlyGradient)" dot={{ r: 4, fill: "#4ade80" }} activeDot={{ r: 7 }} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function CityHeatmap({ items }) {
+  const max = Math.max(...items.map((item) => item.revenue), 1);
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {items.map((item) => {
+        const intensity = Math.max(8, Math.round((item.revenue / max) * 100));
+        return (
+          <div key={item.city} className="rounded-3xl border border-white/10 p-4 bg-white/5 hover:border-blue-400/30 transition relative overflow-hidden">
+            <div className="absolute inset-0 bg-blue-500/20" style={{ opacity: intensity / 180 }} />
+            <div className="relative z-10">
+              <div className="flex justify-between items-start gap-3">
+                <div>
+                  <div className="font-black">{item.city}</div>
+                  <div className="text-xs text-slate-500 mt-1">{item.orders} операций</div>
+                </div>
+                <div className="text-xs rounded-full bg-black/30 border border-white/10 px-2 py-1 text-blue-200">{intensity}%</div>
+              </div>
+              <div className="text-2xl font-black mt-4">{money(item.revenue)}</div>
+              <div className="text-sm text-emerald-300 mt-1">прибыль: {money(item.profit)}</div>
+              <Progress value={intensity} color={intensity > 70 ? "green" : intensity > 35 ? "blue" : "yellow"} />
+            </div>
+          </div>
+        );
+      })}
+      {!items.length && <div className="text-slate-400">Пока нет данных по городам</div>}
+    </div>
+  );
+}
+
+function TopEmployees({ items }) {
+  const max = Math.max(...items.map((item) => Math.abs(item.payoutDue || item.balance || 0)), 1);
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => {
+        const value = Math.abs(item.payoutDue || item.balance || 0);
+        return (
+          <div key={item.employee} className="rounded-3xl bg-white/5 border border-white/10 p-4 hover:border-blue-400/30 transition">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600/20 border border-blue-400/30 grid place-items-center font-black">#{index + 1}</div>
+                <div>
+                  <div className="font-black">{item.employee}</div>
+                  <div className="text-xs text-slate-500">Успешность {item.rate}% · операций {item.total}</div>
+                </div>
+              </div>
+              <div className={item.payoutDue >= 0 ? "text-emerald-300 font-black" : "text-red-300 font-black"}>{money(item.payoutDue || 0)}</div>
+            </div>
+            <Progress value={(value / max) * 100} color={item.payoutDue >= 0 ? "green" : "red"} />
+          </div>
+        );
+      })}
+      {!items.length && <div className="text-slate-400">Пока нет сотрудников с операциями</div>}
+    </div>
+  );
+}
+
+function WeekDynamics({ data }) {
+  const totalRevenue = data.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+  const totalProfit = data.reduce((sum, item) => sum + Number(item.profit || 0), 0);
+  const bestDay = [...data].sort((a, b) => Number(b.profit || 0) - Number(a.profit || 0))[0];
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <InfoCell label="Оборот недели" value={money(totalRevenue)} />
+        <InfoCell label="Прибыль недели" value={money(totalProfit)} />
+        <InfoCell label="Лучший день" value={bestDay ? bestDay.day : "—"} />
+        <InfoCell label="Прибыль дня" value={bestDay ? money(bestDay.profit) : money(0)} />
+      </div>
+      <div className="space-y-2">
+        {data.map((item) => (
+          <div key={item.day} className="grid grid-cols-[60px_1fr_100px] gap-3 items-center text-sm">
+            <div className="text-slate-400">{item.day}</div>
+            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, Math.max(4, Number(item.profit || 0) / Math.max(totalProfit, 1) * 100 * 3))}%` }} />
+            </div>
+            <div className="text-right font-bold">{money(item.profit || 0)}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
