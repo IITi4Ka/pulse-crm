@@ -899,9 +899,31 @@ export default function Home() {
           {active === "Выплаты" && <Payouts data={data} addPayout={addPayout} deletePayout={deletePayout} />}
           {active === "Заметки" && <StaffNotes notes={notes} noteForm={noteForm} setNoteForm={setNoteForm} addStaffNote={addStaffNote} deleteStaffNote={deleteStaffNote} toggleStaffNotePin={toggleStaffNotePin} employeeList={employeeList} currentUser={currentUser} />}
           {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} productCommissions={productCommissions} setProductCommissions={setProductCommissions} employeeList={employeeList} />}
+          <MobileNav active={active} setActive={setActive} />
         </section>
       </div>
     </main>
+  );
+}
+
+function MobileNav({ active, setActive }) {
+  const mainTabs = nav.filter((item) => ["Дашборд", "Продажи", "Склад", "Сотрудники", "Настройки"].includes(item.name));
+
+  return (
+    <div className="lg:hidden fixed left-3 right-3 bottom-3 z-50 rounded-[28px] bg-black/80 backdrop-blur-2xl border border-blue-400/20 shadow-2xl shadow-blue-950/60 p-2">
+      <div className="grid grid-cols-5 gap-1">
+        {mainTabs.map((item) => (
+          <button
+            key={item.name}
+            onClick={() => setActive(item.name)}
+            className={`rounded-2xl px-2 py-3 text-[11px] flex flex-col items-center gap-1 transition ${active === item.name ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+          >
+            <span className="text-lg leading-none">{item.icon}</span>
+            <span className="truncate max-w-full">{item.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
