@@ -861,35 +861,29 @@ export default function Home() {
           </button>
         </aside>
 
-        <section className="flex-1 p-4 md:p-8 space-y-6 overflow-y-auto max-h-screen soft-scroll">
+        <section className="flex-1 p-3 sm:p-4 md:p-8 pb-28 lg:pb-8 space-y-5 md:space-y-6 overflow-y-auto max-h-screen soft-scroll">
           {toast && <Toast text={toast} />}
           {commandOpen && <CommandPalette setActive={setActive} setCommandOpen={setCommandOpen} />}
           {selectedSale && <SaleModal sale={selectedSale} onClose={() => setSelectedSale(null)} />}
 
-          <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+          <header className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 md:gap-4">
             <div>
               <div className="flex flex-wrap gap-2 mb-2">
                 <div className="inline-flex items-center gap-2 text-emerald-300 text-sm rounded-full bg-emerald-500/10 border border-emerald-400/20 px-3 py-1">● Online</div>
                 <div className="inline-flex items-center gap-2 text-slate-300 text-sm rounded-full bg-black/30 border border-white/10 px-3 py-1">{liveDateLabel} · {liveTimeLabel}</div>
               </div>
-              <h1 className="text-3xl md:text-5xl font-black tracking-tight drop-shadow-[0_0_24px_rgba(59,130,246,.35)]">Привет, Администратор 👑</h1>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight drop-shadow-[0_0_24px_rgba(59,130,246,.35)]">Привет, Администратор 👑</h1>
               <p className="text-slate-300 mt-2">Магазин: <span className="text-blue-200 font-bold">{activeStore}</span> · вот что происходит в системе сегодня</p>
             </div>
-            <div className="flex gap-3 items-center">
-              <Input type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} />
-              <Input type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} />
-              <button onClick={exportReport} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-4 py-3 text-sm hover:bg-emerald-600/20 transition">📄 Отчёт</button>
-              <button onClick={resetMonthSales} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-red-400/20 px-4 py-3 text-sm hover:bg-red-600/20 transition">♻️ Сброс</button>
-              <button onClick={() => setCommandOpen(true)} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition">⌘K</button>
+            <div className="flex gap-2 md:gap-3 items-center flex-wrap">
+              <div className="w-[calc(50%-4px)] sm:w-auto"><Input type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} /></div>
+              <div className="w-[calc(50%-4px)] sm:w-auto"><Input type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} /></div>
+              <button onClick={exportReport} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-emerald-600/20 transition">📄 <span className="hidden sm:inline">Отчёт</span></button>
+              <button onClick={resetMonthSales} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-red-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-red-600/20 transition">♻️ <span className="hidden sm:inline">Сброс</span></button>
+              <button onClick={() => setCommandOpen(true)} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-blue-600/20 transition">⌘K</button>
               <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition relative">🔔 <span className="absolute -top-2 -right-2 text-xs bg-red-500 px-2 py-0.5 rounded-full animate-pulse">5</span></button>
-              <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-4 py-3 text-sm hover:bg-emerald-600/15 transition">🟢 Server 99.9%</button>
             </div>
-            <div className="flex gap-2 overflow-x-auto lg:hidden xl:col-span-full">
-              {nav.map((item) => (
-                <button key={item.name} onClick={() => setActive(item.name)} className={`px-3 py-2 rounded-xl text-sm whitespace-nowrap ${active === item.name ? "bg-blue-600" : "bg-white/10 text-slate-300"}`}>{item.icon} {item.name}</button>
-              ))}
-            </div>
-          </header>
+            </header>
 
           <FilterBar filters={filters} setFilters={setFilters} employeeList={employeeList} />
 
