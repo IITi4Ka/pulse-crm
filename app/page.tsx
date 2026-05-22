@@ -155,6 +155,7 @@ export default function Home() {
   const [employeeMeta, setEmployeeMeta] = useState({});
   const [activeStore, setActiveStore] = useState("White Star");
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [stores, setStores] = useState(["White Star", "SnowMan"]);
 
   React.useEffect(() => {
@@ -899,31 +900,103 @@ export default function Home() {
           {active === "Выплаты" && <Payouts data={data} addPayout={addPayout} deletePayout={deletePayout} />}
           {active === "Заметки" && <StaffNotes notes={notes} noteForm={noteForm} setNoteForm={setNoteForm} addStaffNote={addStaffNote} deleteStaffNote={deleteStaffNote} toggleStaffNotePin={toggleStaffNotePin} employeeList={employeeList} currentUser={currentUser} />}
           {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} productCommissions={productCommissions} setProductCommissions={setProductCommissions} employeeList={employeeList} />}
-          <MobileNav active={active} setActive={setActive} />
+          <MobileQuickActions
+            open={mobileSheetOpen}
+            setOpen={setMobileSheetOpen}
+            setActive={setActive}
+            exportReport={exportReport}
+            resetMonthSales={resetMonthSales}
+          />
+          <MobileNav active={active} setActive={setActive} setMobileSheetOpen={setMobileSheetOpen} />
         </section>
       </div>
     </main>
   );
 }
 
-function MobileNav({ active, setActive }) {
-  const mainTabs = nav.filter((item) => ["Дашборд", "Продажи", "Склад", "Сотрудники", "Настройки"].includes(item.name));
+function MobileNav({ active, setActive, setMobileSheetOpen }) {
+  const mainTabs = nav.filter((item) => ["Дашборд", "Продажи", "Склад", "Сотрудники"].includes(item.name));
 
   return (
-    <div className="lg:hidden fixed left-3 right-3 bottom-3 z-50 rounded-[28px] bg-black/80 backdrop-blur-2xl border border-blue-400/20 shadow-2xl shadow-blue-950/60 p-2">
+    <div className="lg:hidden fixed left-3 right-3 bottom-3 z-50 rounded-[30px] bg-black/80 backdrop-blur-2xl border border-blue-400/20 shadow-2xl shadow-blue-950/60 p-2">
       <div className="grid grid-cols-5 gap-1">
         {mainTabs.map((item) => (
           <button
             key={item.name}
             onClick={() => setActive(item.name)}
-            className={`rounded-2xl px-2 py-3 text-[11px] flex flex-col items-center gap-1 transition ${active === item.name ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            className={`rounded-2xl px-2 py-3 text-[11px] flex flex-col items-center gap-1 transition active:scale-95 ${active === item.name ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
           >
             <span className="text-lg leading-none">{item.icon}</span>
             <span className="truncate max-w-full">{item.name}</span>
           </button>
         ))}
+
+        <button
+          onClick={() => setMobileSheetOpen(true)}
+          className="rounded-2xl px-2 py-3 text-[11px] flex flex-col items-center gap-1 transition active:scale-95 bg-white/5 text-slate-300 hover:text-white hover:bg-blue-600/20"
+        >
+          <span className="text-lg leading-none">☰</span>
+          <span>Ещё</span>
+        </button>
       </div>
     </div>
+  );
+}
+
+function MobileQuickActions({ open, setOpen, setActive, exportReport, resetMonthSales }) {
+  const actions = [
+    { label: "Добавить продажу", icon: "🛒", tab: "Продажи" },
+    { label: "Расходы", icon: "💸", tab: "Расходы" },
+    { label: "Выплаты", icon: "💵", tab: "Выплаты" },
+    { label: "Проблемы", icon: "⚠️", tab: "Проблемы" },
+    { label: "AI Аналитик", icon: "🤖", tab: "AI Аналитик" },
+    { label: "Заметки", icon: "📝", tab: "Заметки" },
+    { label: "Настройки", icon: "⚙️", tab: "Настройки" },
+  ];
+
+  return (
+    <>
+      {open && <div className="lg:hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm" onClick={() => setOpen(false)} />}
+      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-[60] transition-transform duration-300 ${open ? "translate-y-0" : "translate-y-full"}`}>
+        <div className="mx-3 mb-3 rounded-[34px] bg-black/90 backdrop-blur-2xl border border-blue-400/20 shadow-2xl shadow-blue-950/70 p-4">
+          <div className="w-12 h-1.5 rounded-full bg-white/20 mx-auto mb-4" />
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-xl font-black">Быстрые действия</div>
+              <div className="text-xs text-slate-500">Mobile control panel</div>
+            </div>
+            <button onClick={() => setOpen(false)} className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 text-slate-300">✕</button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                onClick={() => {
+                  setActive(action.tab);
+                  setOpen(false);
+                }}
+                className="rounded-3xl bg-white/5 border border-white/10 p-4 text-left active:scale-95 transition hover:bg-blue-600/15"
+              >
+                <div className="text-2xl mb-2">{action.icon}</div>
+                <div className="font-bold text-sm">{action.label}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <button onClick={() => { exportReport(); setOpen(false); }} className="rounded-3xl bg-emerald-600/20 border border-emerald-400/20 p-4 text-left active:scale-95 transition">
+              <div className="text-2xl mb-2">📄</div>
+              <div className="font-bold text-sm">Выгрузить отчёт</div>
+            </button>
+            <button onClick={() => { resetMonthSales(); setOpen(false); }} className="rounded-3xl bg-red-600/20 border border-red-400/20 p-4 text-left active:scale-95 transition">
+              <div className="text-2xl mb-2">♻️</div>
+              <div className="font-bold text-sm">Сброс периода</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
