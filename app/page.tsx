@@ -109,6 +109,7 @@ const nav = [
   { name: "Склад", icon: "📦", badge: "" },
   { name: "Сотрудники", icon: "👥", badge: "" },
   { name: "Аналитика", icon: "📈", badge: "" },
+  { name: "AI Аналитик", icon: "🤖", badge: "" },
   { name: "Проблемы", icon: "⚠️", badge: "" },
   { name: "Отчёты", icon: "📄", badge: "" },
   { name: "Расходы", icon: "💸", badge: "" },
@@ -272,6 +273,10 @@ export default function Home() {
   const [payouts, setPayouts] = useState([]);
   const [notes, setNotes] = useState([]);
   const [noteForm, setNoteForm] = useState({ author: "", to: "Всем", text: "", pinned: false });
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiMessages, setAiMessages] = useState([
+    { role: "assistant", text: "Привет. Я AI-аналитик WS/SM. Можешь спросить: какой город самый прибыльный, кто чаще теряет, сколько ушло на замены, какой товар самый выгодный." },
+  ]);
   const [courierStock, setCourierStock] = useState([]);
   const [stockForm, setStockForm] = useState({
     city: "Москва",
@@ -597,6 +602,50 @@ export default function Home() {
       return { name: product.name, start: added, sold: sold + replacementSold, left: added - sold - replacementSold };
     });
 
+    const stockHistory = [
+      ...courierStock.map((item) => ({
+        id: `in-${item.id}`,
+        date: item.date || "—",
+        time: item.time || "—",
+        type: "Приход",
+        city: item.city,
+        employee: item.employee,
+        product: item.product,
+        gram: item.gram,
+        qty: item.qty,
+        total: Number(item.gram || 0) * Number(item.qty || 0),
+        comment: "Добавлено на руки курьеру",
+      })),
+      ...calculatedRows.map((row) => ({
+        id: `sale-${row.id}`,
+        date: row.date,
+        time: row.time || "—",
+        type: isLoss(row.status) ? "Потеря/списание" : "Продажа",
+        city: row.city,
+        employee: row.employee,
+        product: row.product,
+        gram: row.gram,
+        qty: 1,
+        total: Number(row.gram || 0),
+        comment: row.status,
+      })),
+      ...calculatedRows
+        .filter((row) => row.compensationType === "Замена товаром")
+        .map((row) => ({
+          id: `replace-${row.id}`,
+          date: row.date,
+          time: row.time || "—",
+          type: "Замена",
+          city: row.city,
+          employee: row.employee,
+          product: row.replacementProduct,
+          gram: row.replacementGram,
+          qty: 1,
+          total: Number(row.replacementGram || 0),
+          comment: `Замена по операции #${row.id}`,
+        })),
+    ].sort((a, b) => String(`${b.date} ${b.time}`).localeCompare(String(`${a.date} ${a.time}`)));
+
     const kpi = employeeList
       .map((employee) => {
         const own = rows.filter((row) => row.employee === employee);
@@ -706,7 +755,7 @@ export default function Home() {
       };
     });
 
-    return { rows, revenue, cost, profit, totalCourierPayouts, totalPlatformCommission, roi, totalExpenses, netCash, losses, successRate, todayRevenue, todaySalesCount, metricSeries, stock, kpi, cityStats, productStats, statusStats, problemRows, problemLosses, replacementLosses, compensationLosses, problemEmployees, problemCities, dayStats, expenses, payouts, courierStock };
+    return { rows, revenue, cost, profit, totalCourierPayouts, totalPlatformCommission, roi, totalExpenses, netCash, losses, successRate, todayRevenue, todaySalesCount, metricSeries, stock, stockHistory, kpi, cityStats, productStats, statusStats, problemRows, problemLosses, replacementLosses, compensationLosses, problemEmployees, problemCities, dayStats, expenses, payouts, courierStock };
   }, [sales, filters, expenses, payouts, courierStock, employeeList, productCosts, productCommissions]);
 
   if (!currentUser) {
@@ -849,6 +898,7 @@ export default function Home() {
           {active === "Склад" && <Inventory data={data} stockForm={stockForm} setStockForm={setStockForm} courierStock={courierStock} setCourierStock={setCourierStock} employeeList={employeeList} />}
           {active === "Сотрудники" && <Team data={data} employeeList={employeeList} setEmployeeList={setEmployeeList} employeeMeta={employeeMeta} setEmployeeMeta={setEmployeeMeta} />}
           {active === "Аналитика" && <Analytics data={data} />}
+          {active === "AI Аналитик" && <AiAnalyst data={data} aiQuestion={aiQuestion} setAiQuestion={setAiQuestion} aiMessages={aiMessages} setAiMessages={setAiMessages} />}
           {active === "Проблемы" && <Problems data={data} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />}
           {active === "Отчёты" && <Reports data={data} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />}
           {active === "Расходы" && <Expenses data={data} expenseForm={expenseForm} setExpenseForm={setExpenseForm} setExpenses={setExpenses} expenses={expenses} deleteExpense={deleteExpense} />}
@@ -882,14 +932,14 @@ function AuthScreen({ authMode, setAuthMode, authForm, setAuthForm, loginUser, r
 
         <div className="space-y-3">
           {isRegister && (
-            <Field label="Имя" hint="">
-              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })}  />
+            <Field label="Имя" hint="владелец аккаунта">
+              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Например: Admin" />
             </Field>
           )}
-          <Field label="Email" hint="">
+          <Field label="Email" hint="для входа">
             <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="email@example.com" />
           </Field>
-          <Field label="Пароль" hint="">
+          <Field label="Пароль" hint="минимум 4 символа">
             <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="••••••••" />
           </Field>
         </div>
@@ -1042,6 +1092,9 @@ function Inventory({ data, stockForm, setStockForm, courierStock, setCourierStoc
     if (!stockForm.city || !stockForm.employee || !stockForm.product || !stockForm.gram || !stockForm.qty) return;
     const newItem = {
       id: Date.now(),
+      date: localDateKey(),
+      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+      type: "Приход",
       city: stockForm.city,
       employee: stockForm.employee,
       product: stockForm.product,
@@ -1115,6 +1168,52 @@ function Inventory({ data, stockForm, setStockForm, courierStock, setCourierStoc
               {!courierStock.length && (
                 <tr><td colSpan={7} className="py-6 text-center text-slate-400">Пока нет товара на руках</td></tr>
               )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Panel title="История склада">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px] text-sm">
+            <thead>
+              <tr className="text-slate-400 border-b border-white/10">
+                <th className="text-left py-3">Дата</th>
+                <th>Тип</th>
+                <th>Город</th>
+                <th>Сотрудник</th>
+                <th>Товар</th>
+                <th>Фасовка</th>
+                <th>Кол-во</th>
+                <th>Всего</th>
+                <th>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.stockHistory.map((item) => (
+                <tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition">
+                  <td className="py-3 text-left">{item.date} {item.time}</td>
+                  <td className="text-center">
+                    <span className={
+                      item.type === "Приход"
+                        ? "rounded-full px-3 py-1 text-xs border bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                        : item.type === "Замена"
+                          ? "rounded-full px-3 py-1 text-xs border bg-purple-500/10 text-purple-300 border-purple-500/20"
+                          : item.type === "Потеря/списание"
+                            ? "rounded-full px-3 py-1 text-xs border bg-red-500/10 text-red-300 border-red-500/20"
+                            : "rounded-full px-3 py-1 text-xs border bg-blue-500/10 text-blue-300 border-blue-500/20"
+                    }>{item.type}</span>
+                  </td>
+                  <td className="text-center">{item.city}</td>
+                  <td className="text-center">{item.employee}</td>
+                  <td className="text-center">{item.product}</td>
+                  <td className="text-center">{item.gram} г</td>
+                  <td className="text-center">{item.qty}</td>
+                  <td className={item.type === "Приход" ? "text-center text-emerald-300 font-bold" : "text-center text-red-300 font-bold"}>{item.type === "Приход" ? "+" : "-"}{item.total} г</td>
+                  <td className="text-center text-slate-400">{item.comment}</td>
+                </tr>
+              ))}
+              {!data.stockHistory.length && <tr><td colSpan={9} className="py-6 text-center text-slate-400">История склада пока пустая</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1267,6 +1366,99 @@ function Problems({ data, setSelectedSale, deleteSale, updateSaleNote }) {
       </section>
 
       <OperationsTable rows={data.problemRows} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />
+    </div>
+  );
+}
+
+function AiAnalyst({ data, aiQuestion, setAiQuestion, aiMessages, setAiMessages }) {
+  function answerQuestion(question) {
+    const q = question.toLowerCase();
+    const bestCity = [...data.cityStats].sort((a, b) => b.profit - a.profit)[0];
+    const bestProduct = [...data.productStats].sort((a, b) => b.profit - a.profit)[0];
+    const worstEmployee = [...data.problemEmployees].sort((a, b) => b.count - a.count || b.loss - a.loss)[0];
+    const bestEmployee = [...data.kpi].sort((a, b) => b.rating - a.rating)[0];
+
+    if (q.includes("город") && (q.includes("приб") || q.includes("лучш") || q.includes("выгод"))) {
+      return bestCity
+        ? `Самый прибыльный город сейчас: ${bestCity.city}. Прибыль: ${money(bestCity.profit)}, оборот: ${money(bestCity.revenue)}, операций: ${bestCity.orders}.`
+        : "Пока нет данных по городам.";
+    }
+
+    if (q.includes("товар") && (q.includes("выгод") || q.includes("приб") || q.includes("лучш"))) {
+      return bestProduct
+        ? `Самый выгодный товар: ${bestProduct.product}. Прибыль: ${money(bestProduct.profit)}, оборот: ${money(bestProduct.revenue)}, объём: ${bestProduct.grams} г.`
+        : "Пока нет данных по товарам.";
+    }
+
+    if (q.includes("теря") || q.includes("потер") || q.includes("проблем")) {
+      return worstEmployee
+        ? `Больше всего проблем у сотрудника ${worstEmployee.employee}: ${worstEmployee.count} проблемных операций, потери/компенсации: ${money(worstEmployee.loss)}.`
+        : "Проблемных операций пока нет.";
+    }
+
+    if (q.includes("замен")) {
+      return `На замены товаром ушло: ${money(data.replacementLosses)}. Общие компенсации: ${money(data.compensationLosses)}.`;
+    }
+
+    if (q.includes("касс") || q.includes("баланс") || q.includes("день")) {
+      return `Чистая касса сейчас: ${money(data.netCash)}. Оборот: ${money(data.revenue)}, прибыль до расходов: ${money(data.profit)}, расходы: ${money(data.totalExpenses)}.`;
+    }
+
+    if (q.includes("сотруд") || q.includes("курьер") || q.includes("лучш")) {
+      return bestEmployee
+        ? `Лучший сотрудник по рейтингу: ${bestEmployee.employee}. Успешность: ${bestEmployee.rate}%, баланс: ${money(bestEmployee.balance)}, операций: ${bestEmployee.total}.`
+        : "Пока нет данных по сотрудникам.";
+    }
+
+    return `Краткая сводка: оборот ${money(data.revenue)}, прибыль ${money(data.profit)}, чистая касса ${money(data.netCash)}, успешность ${data.successRate}%, проблемных операций ${data.problemRows.length}.`;
+  }
+
+  function askAi() {
+    const question = aiQuestion.trim();
+    if (!question) return;
+    const answer = answerQuestion(question);
+    setAiMessages([...aiMessages, { role: "user", text: question }, { role: "assistant", text: answer }]);
+    setAiQuestion("");
+  }
+
+  const quickQuestions = [
+    "Какой город самый прибыльный?",
+    "Кто чаще теряет?",
+    "Сколько ушло на замены?",
+    "Какой товар самый выгодный?",
+    "Сколько сейчас чистая касса?",
+    "Кто лучший сотрудник?",
+  ];
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
+      <Panel title="AI Аналитик WS/SM">
+        <div className="h-[520px] overflow-y-auto soft-scroll space-y-3 pr-2 mb-4">
+          {aiMessages.map((message, index) => (
+            <div key={index} className={`rounded-3xl p-4 border ${message.role === "user" ? "bg-blue-600/15 border-blue-400/20 ml-12" : "bg-white/5 border-white/10 mr-12"}`}>
+              <div className="text-xs text-slate-500 mb-1">{message.role === "user" ? "Ты" : "AI Аналитик"}</div>
+              <div className="text-slate-100 leading-relaxed">{message.text}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col md:flex-row gap-2">
+          <Input value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") askAi(); }} placeholder="Спроси про прибыль, потери, товары, города..." />
+          <button onClick={askAi} className="rounded-2xl bg-blue-600 hover:bg-blue-500 transition px-6 py-3 font-bold whitespace-nowrap">Спросить</button>
+        </div>
+      </Panel>
+
+      <Panel title="Быстрые вопросы">
+        <div className="space-y-2">
+          {quickQuestions.map((question) => (
+            <button key={question} onClick={() => { const answer = answerQuestion(question); setAiMessages([...aiMessages, { role: "user", text: question }, { role: "assistant", text: answer }]); }} className="w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-left hover:bg-blue-600/15 hover:border-blue-400/30 transition">
+              {question}
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 rounded-2xl bg-black/25 border border-white/10 p-4 text-sm text-slate-400">
+          Сейчас это локальный аналитик по данным CRM. Позже можно подключить настоящий AI API, чтобы он понимал любые вопросы свободным текстом.
+        </div>
+      </Panel>
     </div>
   );
 }
