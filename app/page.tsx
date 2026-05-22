@@ -772,13 +772,13 @@ export default function Home() {
             ))}
           </nav>
 
-          <div className="mt-auto flex items-center justify-between rounded-3xl bg-black/30 border border-white/10 p-4">
+          <button onClick={logoutUser} title="Выйти из аккаунта" className="mt-auto flex items-center justify-between rounded-3xl bg-black/30 border border-white/10 p-4 hover:bg-white/5 hover:border-blue-400/30 transition text-left">
             <div>
-              <div className="font-bold">Администратор</div>
-              <div className="text-xs text-slate-400">Главный доступ</div>
+              <div className="font-bold truncate">{currentUser?.name || "Администратор"}</div>
+              <div className="text-xs text-slate-400">Главный доступ · нажми для выхода</div>
             </div>
             <div className="w-10 h-10 rounded-full bg-blue-600/30 border border-blue-400/30" />
-          </div>
+          </button>
         </aside>
 
         <section className="flex-1 p-4 md:p-8 space-y-6 overflow-y-auto max-h-screen soft-scroll">
@@ -802,9 +802,7 @@ export default function Home() {
               <button onClick={resetMonthSales} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-red-400/20 px-4 py-3 text-sm hover:bg-red-600/20 transition">♻️ Сброс</button>
               <button onClick={() => setCommandOpen(true)} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition">⌘K</button>
               <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition relative">🔔 <span className="absolute -top-2 -right-2 text-xs bg-red-500 px-2 py-0.5 rounded-full animate-pulse">5</span></button>
-              <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-4 py-3 text-sm hover:bg-emerald-600/15 transition">🟢 Server 99.9%</button>
-              <button onClick={logoutUser} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-white/10 px-4 py-3 text-sm hover:bg-white/10 transition">👤 {currentUser.name}</button>
-            </div>
+                          </div>
             <div className="flex gap-2 overflow-x-auto lg:hidden xl:col-span-full">
               {nav.map((item) => (
                 <button key={item.name} onClick={() => setActive(item.name)} className={`px-3 py-2 rounded-xl text-sm whitespace-nowrap ${active === item.name ? "bg-blue-600" : "bg-white/10 text-slate-300"}`}>{item.icon} {item.name}</button>
@@ -851,14 +849,14 @@ function AuthScreen({ authMode, setAuthMode, authForm, setAuthForm, loginUser, r
 
         <div className="space-y-3">
           {isRegister && (
-            <Field label="Имя" hint="владелец аккаунта">
-              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Например: Admin" />
+            <Field label="Имя" hint="">
+              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })}  />
             </Field>
           )}
-          <Field label="Email" hint="для входа">
-            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="email@example.com" />
+          <Field label="Email" hint="">
+            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })}  />
           </Field>
-          <Field label="Пароль" hint="минимум 4 символа">
+          <Field label="Пароль" hint="">
             <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="••••••••" />
           </Field>
         </div>
