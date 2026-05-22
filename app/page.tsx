@@ -112,10 +112,18 @@ const nav = [
   { name: "Проблемы", icon: "⚠️", badge: "" },
   { name: "Отчёты", icon: "📄", badge: "" },
   { name: "Расходы", icon: "💸", badge: "" },
+  { name: "Выплаты", icon: "💵", badge: "" },
   { name: "Настройки", icon: "⚙️", badge: "" },
 ];
 
-function money(value: number) {
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function money(value) {
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
     currency: "RUB",
@@ -214,7 +222,7 @@ export default function Home() {
   const [selectedSale, setSelectedSale] = useState(null);
   const [period, setPeriod] = useState("7 дней");
   const [reportFrom, setReportFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
-  const [reportTo, setReportTo] = useState(new Date().toISOString().slice(0, 10));
+  const [reportTo, setReportTo] = useState(localDateKey());
   const [liveNow, setLiveNow] = useState(new Date());
 
 
@@ -255,8 +263,12 @@ export default function Home() {
   const [productCosts, setProductCosts] = useState(
     Object.fromEntries(products.map((product) => [product.name, product.costPerGram]))
   );
+  const [productCommissions, setProductCommissions] = useState(
+    Object.fromEntries(products.map((product) => [product.name, 0]))
+  );
 
   const [expenses, setExpenses] = useState([]);
+  const [payouts, setPayouts] = useState([]);
   const [courierStock, setCourierStock] = useState([]);
   const [stockForm, setStockForm] = useState({
     city: "Москва",
@@ -299,12 +311,14 @@ export default function Home() {
         const parsed = JSON.parse(saved);
         if (parsed.sales) setSales(parsed.sales);
         if (parsed.expenses) setExpenses(parsed.expenses);
+        if (parsed.payouts) setPayouts(parsed.payouts);
         if (parsed.courierStock) setCourierStock(parsed.courierStock);
         if (parsed.priceMap) setPriceMap(parsed.priceMap);
         if (parsed.productCatalog) {
           products.splice(0, products.length, ...parsed.productCatalog);
         }
         if (parsed.productCosts) setProductCosts(parsed.productCosts);
+        if (parsed.productCommissions) setProductCommissions(parsed.productCommissions);
         if (parsed.employeeList) setEmployeeList(parsed.employeeList);
         if (parsed.employeeMeta) setEmployeeMeta(parsed.employeeMeta);
       } catch (error) {
@@ -316,8 +330,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!appReady) return;
-    localStorage.setItem("pulse-crm-state", JSON.stringify({ sales, expenses, priceMap, productCosts, courierStock, employeeList, employeeMeta, productCatalog: products }));
-  }, [appReady, sales, expenses, priceMap, productCosts, courierStock, employeeList, employeeMeta]);
+    localStorage.setItem("pulse-crm-state", JSON.stringify({ sales, expenses, payouts, priceMap, productCosts, productCommissions, courierStock, employeeList, employeeMeta, productCatalog: products }));
+  }, [appReady, sales, expenses, payouts, priceMap, productCosts, productCommissions, courierStock, employeeList, employeeMeta]);
 
   const selectedProduct = getProduct(form.product);
   const availableGrams = selectedProduct?.grams || [];
@@ -446,6 +460,32 @@ export default function Home() {
     setTimeout(() => setToast(null), 2500);
   }
 
+  function addPayout(employee, amount, type = "Выплата", comment = "") {
+    const value = Number(amount || 0);
+    if (!employee || value <= 0) return;
+    const payout = {
+      id: Date.now(),
+      date: localDateKey(),
+      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+      employee,
+      amount: value,
+      type,
+      comment: comment || "—",
+    };
+    setPayouts([payout, ...payouts]);
+    setExpenses([{ id: Date.now() + 1, date: payout.date, category: "Выплаты", amount: value, comment: `${type}: ${employee}${comment ? ` — ${comment}` : ""}` }, ...expenses]);
+    setToast(`💵 Выплата добавлена: ${employee}`);
+    setTimeout(() => setToast(null), 2500);
+  }
+
+  function deletePayout(id) {
+    const ok = window.confirm("Удалить выплату из истории? Связанный расход при необходимости удали отдельно в разделе Расходы.");
+    if (!ok) return;
+    setPayouts(payouts.filter((payout) => payout.id !== id));
+    setToast("🗑️ Выплата удалена");
+    setTimeout(() => setToast(null), 2500);
+  }
+
   function updateSaleNote(id, note) {
     setSales(sales.map((sale) => (sale.id === id ? { ...sale, note } : sale)));
   }
@@ -467,6 +507,8 @@ export default function Home() {
       const cost = costPerGram * Number(sale.gram || 0);
       const courierPayout = isLoss(sale.status) ? 0 : Number(sale.courierPayout || 0);
       const revenue = isLoss(sale.status) ? 0 : sale.price;
+      const platformCommissionPercent = Number(productCommissions[sale.product] || 0);
+      const platformCommission = revenue * (platformCommissionPercent / 100);
 
       let compensationAmount = 0;
       let replacementCost = 0;
@@ -483,9 +525,9 @@ export default function Home() {
       }
 
       const totalCompensation = compensationAmount + replacementCost;
-      const profit = revenue - cost - courierPayout - totalCompensation;
+      const profit = revenue - cost - courierPayout - platformCommission - totalCompensation;
       const employeeBalance = isLoss(sale.status) ? -cost : courierPayout;
-      return { ...sale, cost, revenue, courierPayout, compensationAmount, replacementCost, totalCompensation, profit, employeeBalance };
+      return { ...sale, cost, revenue, courierPayout, platformCommissionPercent, platformCommission, compensationAmount, replacementCost, totalCompensation, profit, employeeBalance };
       return { ...sale, cost, revenue, courierPayout, compensationAmount, replacementCost, totalCompensation, profit, employeeBalance };
     });
 
@@ -502,6 +544,9 @@ export default function Home() {
     const revenue = rows.reduce((sum, row) => sum + row.revenue, 0);
     const cost = rows.reduce((sum, row) => sum + row.cost, 0);
     const profit = rows.reduce((sum, row) => sum + row.profit, 0);
+    const totalCourierPayouts = rows.reduce((sum, row) => sum + Number(row.courierPayout || 0), 0);
+    const totalPlatformCommission = rows.reduce((sum, row) => sum + Number(row.platformCommission || 0), 0);
+    const roi = cost > 0 ? Math.round((profit / cost) * 100) : 0;
     const totalExpenses = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
     const netCash = profit - totalExpenses;
     const losses = rows.filter((row) => isLoss(row.status)).reduce((sum, row) => sum + row.cost, 0);
@@ -528,11 +573,14 @@ export default function Home() {
         const bad = own.filter((row) => isLoss(row.status)).length;
         const disputes = own.filter((row) => row.status === "Диспут").length;
         const balance = own.reduce((sum, row) => sum + row.employeeBalance, 0);
+        const paid = payouts.filter((payout) => payout.employee === employee).reduce((sum, payout) => sum + Number(payout.amount || 0), 0);
+        const lastPayout = payouts.filter((payout) => payout.employee === employee).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.time).localeCompare(String(a.time)))[0];
+        const payoutDue = balance - paid;
         const rate = own.length ? Math.round((ok / own.length) * 100) : 0;
         const rating = rate + Math.round(balance / 1000) - bad * 15 - disputes * 5;
-        return { employee, total: own.length, ok, bad, disputes, balance, rate, rating };
+        return { employee, total: own.length, ok, bad, disputes, balance, paid, payoutDue, lastPayoutDate: lastPayout?.date || "—", rate, rating };
       })
-      .sort((a, b) => b.rating - a.rating);
+      .sort((a, b) => b.payoutDue - a.payoutDue || b.rating - a.rating);
 
     const cityStats = cities
       .map((city) => {
@@ -603,6 +651,20 @@ export default function Home() {
       .filter((item) => item.total > 0)
       .sort((a, b) => b.rate - a.rate || b.loss - a.loss);
 
+    const todayKey = localDateKey();
+    const todayRows = rows.filter((row) => row.date === todayKey);
+    const todayRevenue = todayRows.reduce((sum, row) => sum + Number(row.revenue || 0), 0);
+    const todaySalesCount = todayRows.length;
+
+    const metricSeries = {
+      revenue: [12, 18, 14, 20, 17, 26, Math.max(8, Math.round(revenue / 1000))],
+      sales: [3, 5, 4, 6, 5, 7, Math.max(1, rows.length)],
+      success: [40, 55, 48, 62, 70, 76, Math.max(1, successRate)],
+      losses: [2, 4, 3, 5, 4, 6, Math.max(1, problemRows.length || losses / 1000)],
+      average: [8, 10, 9, 12, 14, 13, Math.max(1, Math.round((rows.length ? revenue / rows.length : 0) / 1000))],
+      cash: [6, 8, 7, 9, 12, 10, Math.max(1, Math.round(Math.abs(netCash) / 1000))],
+    };
+
     const dayStats = ["2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21"].map((day) => {
       const own = rows.filter((row) => row.date === day);
       return {
@@ -613,8 +675,8 @@ export default function Home() {
       };
     });
 
-    return { rows, revenue, cost, profit, totalExpenses, netCash, losses, successRate, stock, kpi, cityStats, productStats, statusStats, problemRows, problemLosses, replacementLosses, compensationLosses, problemEmployees, problemCities, dayStats, expenses, courierStock };
-  }, [sales, filters, expenses, courierStock, employeeList, productCosts]);
+    return { rows, revenue, cost, profit, totalCourierPayouts, totalPlatformCommission, roi, totalExpenses, netCash, losses, successRate, todayRevenue, todaySalesCount, metricSeries, stock, kpi, cityStats, productStats, statusStats, problemRows, problemLosses, replacementLosses, compensationLosses, problemEmployees, problemCities, dayStats, expenses, payouts, courierStock };
+  }, [sales, filters, expenses, payouts, courierStock, employeeList, productCosts, productCommissions]);
 
   if (!currentUser) {
     return (
@@ -760,7 +822,8 @@ export default function Home() {
           {active === "Проблемы" && <Problems data={data} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />}
           {active === "Отчёты" && <Reports data={data} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />}
           {active === "Расходы" && <Expenses data={data} expenseForm={expenseForm} setExpenseForm={setExpenseForm} setExpenses={setExpenses} expenses={expenses} deleteExpense={deleteExpense} />}
-          {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} employeeList={employeeList} />}
+          {active === "Выплаты" && <Payouts data={data} addPayout={addPayout} deletePayout={deletePayout} />}
+          {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} productCommissions={productCommissions} setProductCommissions={setProductCommissions} employeeList={employeeList} />}
         </section>
       </div>
     </main>
@@ -814,10 +877,18 @@ function FilterBar({ filters, setFilters, employeeList }) {
   return (
     <Panel title="Поиск и фильтры">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Input placeholder="Поиск" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
-        <Select value={filters.city} onChange={(event) => setFilters({ ...filters, city: event.target.value })} options={["Все", ...cities]} />
-        <Select value={filters.employee} onChange={(event) => setFilters({ ...filters, employee: event.target.value })} options={["Все", ...employeeList]} />
-        <Select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })} options={["Все", ...statuses]} />
+        <Field label="Поиск" hint="город, товар, сотрудник, заметка">
+          <Input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Поиск" />
+        </Field>
+        <Field label="Город" hint="фильтр по городу">
+          <Select value={filters.city} onChange={(event) => setFilters({ ...filters, city: event.target.value })} options={["Все", ...cities]} />
+        </Field>
+        <Field label="Сотрудник" hint="фильтр по курьеру">
+          <Select value={filters.employee} onChange={(event) => setFilters({ ...filters, employee: event.target.value })} options={["Все", ...employeeList]} />
+        </Field>
+        <Field label="Статус" hint="итог операции">
+          <Select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })} options={["Все", ...statuses]} />
+        </Field>
       </div>
     </Panel>
   );
@@ -827,12 +898,15 @@ function Dashboard({ data, period, setPeriod, setSelectedSale, deleteSale, updat
   return (
     <div className="space-y-6">
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
-        <Metric title="Оборот" value={money(data.revenue)} sub="+18.2% за неделю" color="blue" icon="💎" />
-        <Metric title="Продаж" value={data.rows.length} sub="+24 сегодня" color="cyan" icon="🛍" />
-        <Metric title="Успешные" value={data.rows.filter((row) => row.status === "Успешно").length} sub={`${data.successRate}% от всех`} color="green" icon="✅" />
-        <Metric title="Потери" value={money(data.losses)} sub="контроль рисков" color="red" icon="🚨" />
-        <Metric title="Средний чек" value={money(data.rows.length ? data.revenue / data.rows.length : 0)} sub="+5.6% к периоду" color="purple" icon="💳" />
-        <Metric title="Чистая касса" value={money(data.netCash)} sub={`Расходы: ${money(data.totalExpenses)}`} color="orange" icon="🏦" />
+        <Metric title="Оборот" value={money(data.revenue)} sub={`Сегодня: ${money(data.todayRevenue)}`} color="blue" icon="💎" series={data.metricSeries.revenue} />
+        <Metric title="Продаж" value={data.rows.length} sub={`Сегодня: ${data.todaySalesCount}`} color="cyan" icon="🛍" series={data.metricSeries.sales} />
+        <Metric title="Успешные" value={data.rows.filter((row) => row.status === "Успешно").length} sub={`${data.successRate}% успешности`} color="green" icon="✅" series={data.metricSeries.success} />
+        <Metric title="Потери" value={money(data.losses)} sub={`Проблем: ${data.problemRows.length}`} color="red" icon="🚨" series={data.metricSeries.losses} />
+        <Metric title="Средний чек" value={money(data.rows.length ? data.revenue / data.rows.length : 0)} sub={`Сред. прибыль: ${money(data.rows.length ? data.profit / data.rows.length : 0)}`} color="purple" icon="💳" series={data.metricSeries.average} />
+        <Metric title="Чистая касса" value={money(data.netCash)} sub={`Расходы: ${money(data.totalExpenses)}`} color="orange" icon="🏦" series={data.metricSeries.cash} />
+        <Metric title="Комиссия площадки" value={money(data.totalPlatformCommission)} sub="автоматически по товарам" color="red" icon="🏛️" series={data.metricSeries.losses} />
+        <Metric title="Выплаты курьерам" value={money(data.totalCourierPayouts)} sub="начислено по операциям" color="cyan" icon="💵" series={data.metricSeries.sales} />
+        <Metric title="ROI" value={`${data.roi}%`} sub="прибыль / себестоимость" color={data.roi >= 0 ? "green" : "red"} icon="📈" series={data.metricSeries.success} />
       </section>
 
       <section className="grid grid-cols-1 2xl:grid-cols-[1.45fr_.8fr] gap-6 items-stretch">
@@ -1273,7 +1347,158 @@ function Expenses({ data, expenseForm, setExpenseForm, setExpenses, expenses, de
   );
 }
 
-function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, employeeList }) {
+function Payouts({ data, addPayout, deletePayout }) {
+  const [amounts, setAmounts] = useState({});
+  const [payoutTypes, setPayoutTypes] = useState({});
+  const [payoutComments, setPayoutComments] = useState({});
+  const [selectedEmployee, setSelectedEmployee] = useState(data.kpi[0]?.employee || "");
+
+  const totalAccrued = data.kpi.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+  const totalPaid = data.kpi.reduce((sum, item) => sum + Number(item.paid || 0), 0);
+  const totalDue = data.kpi.reduce((sum, item) => sum + Number(item.payoutDue || 0), 0);
+
+  const selected = data.kpi.find((item) => item.employee === selectedEmployee) || data.kpi[0];
+  const employeeRows = data.rows.filter((row) => row.employee === selected?.employee);
+  const employeePayouts = data.payouts.filter((payout) => payout.employee === selected?.employee);
+
+  return (
+    <div className="space-y-6">
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Metric title="Начислено" value={money(totalAccrued)} sub="по всем сотрудникам" color="blue" icon="📊" />
+        <Metric title="Выплачено" value={money(totalPaid)} sub="по истории выплат" color="green" icon="💵" />
+        <Metric title="К выплате" value={money(totalDue)} sub="актуальный общий баланс" color="orange" icon="🏦" />
+      </section>
+
+      <section className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-6">
+        <Panel title="Курьеры">
+          <div className="space-y-2 max-h-[680px] overflow-y-auto soft-scroll pr-1">
+            {data.kpi.map((item) => (
+              <button
+                key={item.employee}
+                onClick={() => setSelectedEmployee(item.employee)}
+                className={`w-full rounded-2xl border p-4 text-left transition ${selected?.employee === item.employee ? "bg-blue-600/20 border-blue-400/40" : "bg-white/5 border-white/10 hover:bg-white/10"}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-black truncate">{item.employee}</div>
+                  <div className={item.payoutDue > 0 ? "text-emerald-300 font-black" : item.payoutDue < 0 ? "text-red-300 font-black" : "text-slate-400 font-black"}>{money(item.payoutDue)}</div>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">Начислено: {money(item.balance)} · Выплачено: {money(item.paid)}</div>
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <div className="space-y-6">
+          <Panel title={`Баланс сотрудника: ${selected?.employee || "—"}`}>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+              <InfoCell label="Начислено" value={money(selected?.balance || 0)} />
+              <InfoCell label="Выплачено" value={money(selected?.paid || 0)} />
+              <InfoCell label="К выплате" value={money(selected?.payoutDue || 0)} />
+              <InfoCell label="Последняя выплата" value={selected?.lastPayoutDate || "—"} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_1.3fr_auto] gap-2">
+              <Field label="Сумма" hint="сколько выплатить">
+                <Input value={amounts[selected?.employee] || ""} onChange={(event) => setAmounts({ ...amounts, [selected?.employee]: event.target.value })} placeholder="Сумма выплаты" />
+              </Field>
+              <Field label="Тип" hint="за что">
+                <Select value={payoutTypes[selected?.employee] || "Выплата"} onChange={(event) => setPayoutTypes({ ...payoutTypes, [selected?.employee]: event.target.value })} options={["Выплата", "Бонус", "Компенсация", "Аванс", "Корректировка"]} />
+              </Field>
+              <Field label="Комментарий" hint="пояснение">
+                <Input value={payoutComments[selected?.employee] || ""} onChange={(event) => setPayoutComments({ ...payoutComments, [selected?.employee]: event.target.value })} placeholder="Например: за неделю / бонус / корректировка" />
+              </Field>
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    const employee = selected?.employee;
+                    if (!employee) return;
+                    addPayout(employee, amounts[employee] || selected?.payoutDue, payoutTypes[employee] || "Выплата", payoutComments[employee] || "");
+                    setAmounts({ ...amounts, [employee]: "" });
+                    setPayoutComments({ ...payoutComments, [employee]: "" });
+                  }}
+                  className="rounded-2xl bg-emerald-600 hover:bg-emerald-500 transition px-6 py-3 font-bold whitespace-nowrap w-full"
+                >
+                  Выплатить
+                </button>
+              </div>
+            </div>
+            <p className="text-slate-500 text-xs mt-3">Если сумма пустая, система выплатит весь текущий баланс сотрудника. Комментарий попадёт в историю выплат и расходы.</p>
+          </Panel>
+
+          <Panel title="Расшифровка начислений и удержаний">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] text-sm">
+                <thead>
+                  <tr className="text-slate-400 border-b border-white/10">
+                    <th className="text-left py-3">Дата</th>
+                    <th>Статус</th>
+                    <th>Товар</th>
+                    <th>Цена</th>
+                    <th>Выплата</th>
+                    <th>Удержание</th>
+                    <th>Итог</th>
+                    <th>Заметка</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeRows.map((row) => {
+                    const hold = row.employeeBalance < 0 ? Math.abs(row.employeeBalance) : 0;
+                    const payout = row.employeeBalance > 0 ? row.employeeBalance : 0;
+                    return (
+                      <tr key={row.id} className="border-b border-white/5 hover:bg-white/5 transition">
+                        <td className="py-3 text-left">{row.date} {row.time}</td>
+                        <td className="text-center"><StatusBadge status={row.status} /></td>
+                        <td className="text-center">{row.product} · {row.gram} г</td>
+                        <td className="text-center">{money(row.price)}</td>
+                        <td className="text-center text-emerald-300">{payout ? money(payout) : "—"}</td>
+                        <td className="text-center text-red-300">{hold ? money(hold) : "—"}</td>
+                        <td className={row.employeeBalance >= 0 ? "text-center text-emerald-300 font-bold" : "text-center text-red-300 font-bold"}>{money(row.employeeBalance || 0)}</td>
+                        <td className="text-center text-slate-400">{row.note || row.compensationType || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                  {!employeeRows.length && <tr><td colSpan={8} className="py-6 text-center text-slate-400">У сотрудника пока нет операций</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+
+          <Panel title="История выплат выбранного сотрудника">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[650px] text-sm">
+                <thead>
+                  <tr className="text-slate-400 border-b border-white/10">
+                    <th className="text-left py-3">Дата</th>
+                    <th>Время</th>
+                    <th>Сумма</th>
+                    <th>Тип</th>
+                    <th>Комментарий</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeePayouts.map((payout) => (
+                    <tr key={payout.id} className="border-b border-white/5 hover:bg-white/5 transition">
+                      <td className="py-3">{payout.date}</td>
+                      <td className="text-center">{payout.time}</td>
+                      <td className="text-center text-emerald-300 font-bold">{money(payout.amount)}</td>
+                      <td className="text-center text-blue-300">{payout.type || "Выплата"}</td>
+                      <td className="text-center text-slate-400">{payout.comment || "—"}</td>
+                      <td className="text-right"><button onClick={() => deletePayout?.(payout.id)} className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 px-3 py-1 hover:bg-red-500/20 transition">Удалить</button></td>
+                    </tr>
+                  ))}
+                  {!employeePayouts.length && <tr><td colSpan={6} className="py-6 text-center text-slate-400">Выплат этому сотруднику пока нет</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, productCommissions, setProductCommissions, employeeList }) {
   const [selectedCity, setSelectedCity] = useState(cities[0]);
   const [newCity, setNewCity] = useState("");
   const [newGram, setNewGram] = useState("");
@@ -1309,6 +1534,7 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, employ
     const grams = Array.from(new Set(products.flatMap((product) => product.grams))).sort((a, b) => a - b);
     products.push({ name, costPerGram: 0, stock: 0, grams: grams.length ? grams : [0.5, 1, 2, 3, 5] });
     setProductCosts({ ...productCosts, [name]: 0 });
+    setProductCommissions({ ...productCommissions, [name]: 0 });
     setNewProduct("");
   }
 
@@ -1322,6 +1548,10 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, employ
       const nextCosts = { ...productCosts, [newName]: productCosts[oldName] || 0 };
       delete nextCosts[oldName];
       setProductCosts(nextCosts);
+
+      const nextCommissions = { ...productCommissions, [newName]: productCommissions[oldName] || 0 };
+      delete nextCommissions[oldName];
+      setProductCommissions(nextCommissions);
 
       setPriceMap((current) => {
         const next = { ...current };
@@ -1395,6 +1625,14 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, employ
                   value={productCosts[product.name] || ""}
                   onChange={(event) => setProductCosts({ ...productCosts, [product.name]: Number(event.target.value || 0) })}
                   placeholder="Себестоимость за 1г"
+                />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 mb-1">Комиссия площадки, %</div>
+                <Input
+                  value={productCommissions[product.name] || ""}
+                  onChange={(event) => setProductCommissions({ ...productCommissions, [product.name]: Number(event.target.value || 0) })}
+                  placeholder="Например: 5"
                 />
               </div>
             </div>
@@ -1542,27 +1780,34 @@ function QuickAction({ icon, text }) {
   return <button className="rounded-2xl bg-white/5 border border-white/10 p-4 text-left hover:bg-blue-600/20 hover:border-blue-400/30 transition hover:-translate-y-1 group"><div className="text-2xl group-hover:scale-110 transition">{icon}</div><div className="text-sm mt-2 text-slate-200">{text}</div></button>;
 }
 
-function Metric({ title, value, sub, color, icon }) {
+function Metric({ title, value, sub, color, icon, series }) {
   const colors = {
     blue: "from-blue-600/30 border-blue-400/30",
-    cyan: "from-cyan-600/25 border-cyan-400/25",
+    cyan: "from-cyan-600/30 border-cyan-400/30",
     green: "from-emerald-600/30 border-emerald-400/30",
     red: "from-red-600/30 border-red-400/30",
-    yellow: "from-yellow-600/30 border-yellow-400/30",
     purple: "from-purple-600/30 border-purple-400/30",
     orange: "from-orange-600/30 border-orange-400/30",
   };
 
+  const points = series && series.length ? series : [1, 2, 1, 3, 2, 4, 3];
+  const max = Math.max(...points, 1);
+
   return (
-    <div className={`premium-card rounded-3xl bg-gradient-to-br ${colors[color]} to-black/45 backdrop-blur-xl border shadow-2xl p-5 relative overflow-hidden transition duration-300 hover:-translate-y-1 hover:shadow-blue-500/20`}>
-      <div className="absolute -right-8 -top-8 w-28 h-28 bg-white/5 rounded-full blur-2xl" />
-      <div className="flex justify-between">
-        <span className="text-slate-300 text-sm">{title}</span>
-        <span className="w-10 h-10 rounded-2xl bg-blue-500/20 grid place-items-center">{icon}</span>
+    <div className={`rounded-3xl bg-gradient-to-br ${colors[color] || colors.blue} bg-black/40 border p-5 shadow-xl backdrop-blur-xl overflow-hidden relative`}>
+      <div className="absolute right-4 top-4 w-12 h-12 rounded-2xl bg-blue-500/20 grid place-items-center text-xl">{icon}</div>
+      <div className="text-slate-300 text-sm">{title}</div>
+      <div className="text-3xl font-black mt-5">{value}</div>
+      <div className={String(sub).includes("Проблем") || String(value).startsWith("-") ? "text-red-300 text-xs mt-2" : "text-emerald-300 text-xs mt-2"}>{sub}</div>
+      <div className="mt-5 flex items-end gap-1 h-8">
+        {points.map((point, index) => (
+          <div
+            key={index}
+            className="flex-1 rounded-t bg-blue-500/70"
+            style={{ height: `${Math.max(12, (Number(point) / max) * 100)}%` }}
+          />
+        ))}
       </div>
-      <div className="text-3xl font-black mt-3">{value}</div>
-      <div className={color === "red" ? "text-red-400 text-xs mt-2" : "text-emerald-400 text-xs mt-2"}>{sub}</div>
-      <Spark />
     </div>
   );
 }
@@ -1613,6 +1858,7 @@ function SaleModal({ sale, onClose }) {
           <InfoCell label="Цена" value={money(sale.price)} />
           <InfoCell label="Себестоимость" value={money(sale.cost || 0)} />
           <InfoCell label="Выплата курьеру" value={money(sale.courierPayout || 0)} />
+          <InfoCell label="Комиссия площадки" value={money(sale.platformCommission || 0)} />
           <InfoCell label="Прибыль" value={money(sale.profit)} />
         </div>
       </div>
@@ -1901,6 +2147,7 @@ function OperationsTable({ rows, compact, setSelectedSale, deleteSale, updateSal
               <th>Цена</th>
               <th>Себест.</th>
               <th>Выплата</th>
+              <th>Комиссия</th>
               <th>Статус</th>
               <th>Заметка</th>
               <th>Компенсация</th>
@@ -1919,6 +2166,7 @@ function OperationsTable({ rows, compact, setSelectedSale, deleteSale, updateSal
                 <td className="text-center">{money(row.price)}</td>
                 <td className="text-center text-orange-300">{money(row.cost || 0)}</td>
                 <td className="text-center text-blue-300">{money(row.courierPayout || 0)}</td>
+                <td className="text-center text-red-300">{money(row.platformCommission || 0)}</td>
                 <td className="text-center"><StatusBadge status={row.status} /></td>
                 <td className="text-center">
                   <input
