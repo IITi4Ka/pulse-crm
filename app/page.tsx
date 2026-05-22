@@ -115,7 +115,7 @@ const nav = [
   { name: "Настройки", icon: "⚙️", badge: "" },
 ];
 
-function money(value) {
+function money(value: number) {
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
     currency: "RUB",
