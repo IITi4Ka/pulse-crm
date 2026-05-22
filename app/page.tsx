@@ -113,6 +113,7 @@ const nav = [
   { name: "Отчёты", icon: "📄", badge: "" },
   { name: "Расходы", icon: "💸", badge: "" },
   { name: "Выплаты", icon: "💵", badge: "" },
+  { name: "Заметки", icon: "📝", badge: "" },
   { name: "Настройки", icon: "⚙️", badge: "" },
 ];
 
@@ -269,6 +270,8 @@ export default function Home() {
 
   const [expenses, setExpenses] = useState([]);
   const [payouts, setPayouts] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [noteForm, setNoteForm] = useState({ author: "", to: "Всем", text: "", pinned: false });
   const [courierStock, setCourierStock] = useState([]);
   const [stockForm, setStockForm] = useState({
     city: "Москва",
@@ -312,6 +315,7 @@ export default function Home() {
         if (parsed.sales) setSales(parsed.sales);
         if (parsed.expenses) setExpenses(parsed.expenses);
         if (parsed.payouts) setPayouts(parsed.payouts);
+        if (parsed.notes) setNotes(parsed.notes);
         if (parsed.courierStock) setCourierStock(parsed.courierStock);
         if (parsed.priceMap) setPriceMap(parsed.priceMap);
         if (parsed.productCatalog) {
@@ -330,8 +334,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!appReady) return;
-    localStorage.setItem("pulse-crm-state", JSON.stringify({ sales, expenses, payouts, priceMap, productCosts, productCommissions, courierStock, employeeList, employeeMeta, productCatalog: products }));
-  }, [appReady, sales, expenses, payouts, priceMap, productCosts, productCommissions, courierStock, employeeList, employeeMeta]);
+    localStorage.setItem("pulse-crm-state", JSON.stringify({ sales, expenses, payouts, notes, priceMap, productCosts, productCommissions, courierStock, employeeList, employeeMeta, productCatalog: products }));
+  }, [appReady, sales, expenses, payouts, notes, priceMap, productCosts, productCommissions, courierStock, employeeList, employeeMeta]);
 
   const selectedProduct = getProduct(form.product);
   const availableGrams = selectedProduct?.grams || [];
@@ -488,6 +492,33 @@ export default function Home() {
 
   function updateSaleNote(id, note) {
     setSales(sales.map((sale) => (sale.id === id ? { ...sale, note } : sale)));
+  }
+
+  function addStaffNote() {
+    if (!noteForm.text.trim()) return;
+    const newNote = {
+      id: Date.now(),
+      date: localDateKey(),
+      time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+      author: noteForm.author || currentUser?.name || "Администратор",
+      to: noteForm.to || "Всем",
+      text: noteForm.text.trim(),
+      pinned: Boolean(noteForm.pinned),
+    };
+    setNotes([newNote, ...notes]);
+    setNoteForm({ ...noteForm, text: "", pinned: false });
+    setToast("📝 Заметка добавлена");
+    setTimeout(() => setToast(null), 2500);
+  }
+
+  function deleteStaffNote(id) {
+    const ok = window.confirm("Удалить заметку?");
+    if (!ok) return;
+    setNotes(notes.filter((note) => note.id !== id));
+  }
+
+  function toggleStaffNotePin(id) {
+    setNotes(notes.map((note) => note.id === id ? { ...note, pinned: !note.pinned } : note));
   }
 
   React.useEffect(() => {
@@ -802,7 +833,8 @@ export default function Home() {
               <button onClick={resetMonthSales} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-red-400/20 px-4 py-3 text-sm hover:bg-red-600/20 transition">♻️ Сброс</button>
               <button onClick={() => setCommandOpen(true)} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition">⌘K</button>
               <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition relative">🔔 <span className="absolute -top-2 -right-2 text-xs bg-red-500 px-2 py-0.5 rounded-full animate-pulse">5</span></button>
-                          </div>
+              <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-4 py-3 text-sm hover:bg-emerald-600/15 transition">🟢 Server 99.9%</button>
+            </div>
             <div className="flex gap-2 overflow-x-auto lg:hidden xl:col-span-full">
               {nav.map((item) => (
                 <button key={item.name} onClick={() => setActive(item.name)} className={`px-3 py-2 rounded-xl text-sm whitespace-nowrap ${active === item.name ? "bg-blue-600" : "bg-white/10 text-slate-300"}`}>{item.icon} {item.name}</button>
@@ -821,6 +853,7 @@ export default function Home() {
           {active === "Отчёты" && <Reports data={data} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />}
           {active === "Расходы" && <Expenses data={data} expenseForm={expenseForm} setExpenseForm={setExpenseForm} setExpenses={setExpenses} expenses={expenses} deleteExpense={deleteExpense} />}
           {active === "Выплаты" && <Payouts data={data} addPayout={addPayout} deletePayout={deletePayout} />}
+          {active === "Заметки" && <StaffNotes notes={notes} noteForm={noteForm} setNoteForm={setNoteForm} addStaffNote={addStaffNote} deleteStaffNote={deleteStaffNote} toggleStaffNotePin={toggleStaffNotePin} employeeList={employeeList} currentUser={currentUser} />}
           {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} productCommissions={productCommissions} setProductCommissions={setProductCommissions} employeeList={employeeList} />}
         </section>
       </div>
@@ -849,14 +882,14 @@ function AuthScreen({ authMode, setAuthMode, authForm, setAuthForm, loginUser, r
 
         <div className="space-y-3">
           {isRegister && (
-            <Field label="Имя" hint="">
-              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })}  />
+            <Field label="Имя" hint="владелец аккаунта">
+              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Например: Admin" />
             </Field>
           )}
-          <Field label="Email" hint="">
-            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })}  />
+          <Field label="Email" hint="для входа">
+            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="email@example.com" />
           </Field>
-          <Field label="Пароль" hint="">
+          <Field label="Пароль" hint="минимум 4 символа">
             <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="••••••••" />
           </Field>
         </div>
@@ -1492,6 +1525,73 @@ function Payouts({ data, addPayout, deletePayout }) {
           </Panel>
         </div>
       </section>
+    </div>
+  );
+}
+
+function StaffNotes({ notes, noteForm, setNoteForm, addStaffNote, deleteStaffNote, toggleStaffNotePin, employeeList, currentUser }) {
+  const sortedNotes = [...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.id - a.id);
+
+  return (
+    <div className="space-y-6">
+      <Panel title="Добавить заметку">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_2fr_auto] gap-3">
+          <Field label="Автор" hint="кто пишет">
+            <Select
+              value={noteForm.author || currentUser?.name || "Администратор"}
+              onChange={(event) => setNoteForm({ ...noteForm, author: event.target.value })}
+              options={[currentUser?.name || "Администратор", ...employeeList]}
+            />
+          </Field>
+          <Field label="Кому" hint="адресат">
+            <Select
+              value={noteForm.to}
+              onChange={(event) => setNoteForm({ ...noteForm, to: event.target.value })}
+              options={["Всем", ...employeeList]}
+            />
+          </Field>
+          <Field label="Текст" hint="сообщение / напоминание">
+            <Input
+              value={noteForm.text}
+              onChange={(event) => setNoteForm({ ...noteForm, text: event.target.value })}
+              placeholder=""
+            />
+          </Field>
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => setNoteForm({ ...noteForm, pinned: !noteForm.pinned })}
+              className={`rounded-2xl border px-4 py-3 font-bold ${noteForm.pinned ? "bg-yellow-500/20 border-yellow-400/30 text-yellow-200" : "bg-white/5 border-white/10 text-slate-300"}`}
+            >
+              📌
+            </button>
+            <button onClick={addStaffNote} className="rounded-2xl bg-blue-600 hover:bg-blue-500 transition px-6 py-3 font-bold whitespace-nowrap">
+              Добавить
+            </button>
+          </div>
+        </div>
+      </Panel>
+
+      <Panel title="Доска заметок">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {sortedNotes.map((note) => (
+            <div key={note.id} className={`rounded-3xl border p-5 bg-white/5 ${note.pinned ? "border-yellow-400/40 shadow-lg shadow-yellow-500/10" : "border-white/10"}`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <div className="font-black">{note.author}</div>
+                  <div className="text-xs text-slate-500">{note.date} · {note.time}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => toggleStaffNotePin(note.id)} className="rounded-xl bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-yellow-200">📌</button>
+                  <button onClick={() => deleteStaffNote(note.id)} className="rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-1 text-red-300">Удалить</button>
+                </div>
+              </div>
+              <div className="text-xs text-blue-300 mb-3">Кому: {note.to}</div>
+              <div className="text-slate-200 leading-relaxed whitespace-pre-wrap">{note.text}</div>
+            </div>
+          ))}
+          {!sortedNotes.length && <div className="text-slate-400">Заметок пока нет</div>}
+        </div>
+      </Panel>
     </div>
   );
 }
