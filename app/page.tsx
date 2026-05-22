@@ -125,6 +125,42 @@ function localDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function localTimeKey(date = new Date()) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function formatDateRu(value) {
+  if (!value) return "";
+  const [year, month, day] = String(value).split("-");
+  if (!year || !month || !day) return value;
+  return `${day}.${month}.${year}`;
+}
+
+function normalizeDateInput(value) {
+  const raw = String(value || "").replace(/[^0-9]/g, "").slice(0, 8);
+  const day = raw.slice(0, 2);
+  const month = raw.slice(2, 4);
+  const year = raw.slice(4, 8);
+  return [day, month, year].filter(Boolean).join(".");
+}
+
+function displayDateToIso(value) {
+  const parts = String(value || "").split(".");
+  if (parts.length !== 3) return "";
+  const [day, month, year] = parts;
+  if (day.length !== 2 || month.length !== 2 || year.length !== 4) return "";
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeTimeInput(value) {
+  const raw = String(value || "").replace(/[^0-9]/g, "").slice(0, 4);
+  const hours = raw.slice(0, 2);
+  const minutes = raw.slice(2, 4);
+  return [hours, minutes].filter(Boolean).join(":");
+}
+
 function money(value) {
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
@@ -288,7 +324,7 @@ export default function Home() {
   });
 
   const [expenseForm, setExpenseForm] = useState({
-    date: "2026-05-21",
+    date: localDateKey(),
     category: "Реклама",
     amount: "",
     comment: "",
@@ -297,8 +333,8 @@ export default function Home() {
   const [sales, setSales] = useState([]);
 
   const [form, setForm] = useState({
-    date: "2026-05-21",
-    time: "21:00",
+    date: localDateKey(),
+    time: localTimeKey(),
     city: "Москва",
     employee: "Иван",
     product: "Товар 1",
@@ -877,8 +913,8 @@ export default function Home() {
               <p className="text-slate-300 mt-2">Магазин: <span className="text-blue-200 font-bold">{activeStore}</span> · вот что происходит в системе сегодня</p>
             </div>
             <div className="flex gap-2 md:gap-3 items-center flex-wrap">
-              <div className="w-[calc(50%-4px)] sm:w-auto"><Input type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} /></div>
-              <div className="w-[calc(50%-4px)] sm:w-auto"><Input type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} /></div>
+              <div className="w-[calc(50%-4px)] sm:w-auto"><DateInput value={reportFrom} onChange={setReportFrom} /></div>
+              <div className="w-[calc(50%-4px)] sm:w-auto"><DateInput value={reportTo} onChange={setReportTo} /></div>
               <button onClick={exportReport} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-emerald-600/20 transition">📄 <span className="hidden sm:inline">Отчёт</span></button>
               <button onClick={resetMonthSales} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-red-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-red-600/20 transition">♻️ <span className="hidden sm:inline">Сброс</span></button>
               <button onClick={() => setCommandOpen(true)} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-blue-600/20 transition">⌘K</button>
@@ -1127,10 +1163,10 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
       <Panel title="Быстрый ввод операции">
         <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-5 gap-3">
           <Field label="Дата" hint="День операции">
-            <Input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
+            <DateInput value={form.date} onChange={(value) => setForm({ ...form, date: value })} />
           </Field>
           <Field label="Время" hint="Когда была операция">
-            <Input type="time" value={form.time} onChange={(event) => setForm({ ...form, time: event.target.value })} />
+            <TimeInput value={form.time} onChange={(value) => setForm({ ...form, time: value })} />
           </Field>
           <Field label="Город" hint="Где была продажа">
             <Select value={form.city} onChange={(event) => updateForm({ city: event.target.value })} options={cities} />
@@ -1610,7 +1646,7 @@ function Expenses({ data, expenseForm, setExpenseForm, setExpenses, expenses, de
 
       <Panel title="Добавить расход">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Input type="date" value={expenseForm.date} onChange={(event) => setExpenseForm({ ...expenseForm, date: event.target.value })} />
+          <DateInput value={expenseForm.date} onChange={(value) => setExpenseForm({ ...expenseForm, date: value })} />
           <Select value={expenseForm.category} onChange={(event) => setExpenseForm({ ...expenseForm, category: event.target.value })} options={expenseCategories} />
           <Input value={expenseForm.amount} onChange={(event) => setExpenseForm({ ...expenseForm, amount: event.target.value })} placeholder="Сумма" />
           <Input value={expenseForm.comment} onChange={(event) => setExpenseForm({ ...expenseForm, comment: event.target.value })} placeholder="Комментарий" />
@@ -2282,6 +2318,65 @@ function Field({ label, hint, children }) {
 
 function Input(props) {
   return <input {...props} className="w-full rounded-2xl bg-black/35 border border-white/10 px-4 py-3 text-white outline-none focus:border-blue-400 backdrop-blur-xl" />;
+}
+
+function DateInput({ value, onChange }) {
+  const [display, setDisplay] = useState(formatDateRu(value));
+
+  useEffect(() => {
+    setDisplay(formatDateRu(value));
+  }, [value]);
+
+  function handleChange(event) {
+    const nextDisplay = normalizeDateInput(event.target.value);
+    setDisplay(nextDisplay);
+    const iso = displayDateToIso(nextDisplay);
+    if (iso) onChange(iso);
+  }
+
+  function setToday() {
+    const today = localDateKey();
+    setDisplay(formatDateRu(today));
+    onChange(today);
+  }
+
+  return (
+    <div className="relative">
+      <Input value={display} onChange={handleChange} placeholder="дд.мм.гггг" inputMode="numeric" maxLength={10} className="pr-24" />
+      <button type="button" onClick={setToday} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition">
+        Сегодня
+      </button>
+    </div>
+  );
+}
+
+function TimeInput({ value, onChange }) {
+  const [display, setDisplay] = useState(value || localTimeKey());
+
+  useEffect(() => {
+    setDisplay(value || "");
+  }, [value]);
+
+  function handleChange(event) {
+    const nextDisplay = normalizeTimeInput(event.target.value);
+    setDisplay(nextDisplay);
+    if (nextDisplay.length === 5) onChange(nextDisplay);
+  }
+
+  function setNow() {
+    const now = localTimeKey();
+    setDisplay(now);
+    onChange(now);
+  }
+
+  return (
+    <div className="relative">
+      <Input value={display} onChange={handleChange} placeholder="чч:мм" inputMode="numeric" maxLength={5} className="pr-24" />
+      <button type="button" onClick={setNow} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition">
+        Сейчас
+      </button>
+    </div>
+  );
 }
 
 function Select({ options, ...props }) {
