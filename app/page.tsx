@@ -1058,14 +1058,14 @@ function AuthScreen({ authMode, setAuthMode, authForm, setAuthForm, loginUser, r
         <div className="space-y-3">
           {isRegister && (
             <Field label="Имя" hint="владелец аккаунта">
-              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Например: Admin" />
+              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="" />
             </Field>
           )}
           <Field label="Email" hint="для входа">
-            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="email@example.com" />
+            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="" />
           </Field>
           <Field label="Пароль" hint="минимум 4 символа">
-            <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="••••••••" />
+            <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="" />
           </Field>
         </div>
 
