@@ -182,6 +182,10 @@ function isLoss(status) {
   return lossStatuses.includes(status);
 }
 
+function activeProducts() {
+  return products.filter((product) => !product.archived);
+}
+
 export default function Home() {
   const [active, setActive] = useState("Дашборд");
   const [currentUser, setCurrentUser] = useState(null);
@@ -935,7 +939,7 @@ export default function Home() {
           {active === "Расходы" && <Expenses data={data} expenseForm={expenseForm} setExpenseForm={setExpenseForm} setExpenses={setExpenses} expenses={expenses} deleteExpense={deleteExpense} />}
           {active === "Выплаты" && <Payouts data={data} addPayout={addPayout} deletePayout={deletePayout} />}
           {active === "Заметки" && <StaffNotes notes={notes} noteForm={noteForm} setNoteForm={setNoteForm} addStaffNote={addStaffNote} deleteStaffNote={deleteStaffNote} toggleStaffNotePin={toggleStaffNotePin} employeeList={employeeList} currentUser={currentUser} />}
-          {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} productCommissions={productCommissions} setProductCommissions={setProductCommissions} employeeList={employeeList} />}
+          {active === "Настройки" && <Settings priceMap={priceMap} setPriceMap={setPriceMap} productCosts={productCosts} setProductCosts={setProductCosts} productCommissions={productCommissions} setProductCommissions={setProductCommissions} employeeList={employeeList} sales={sales} />}
           <MobileQuickActions
             open={mobileSheetOpen}
             setOpen={setMobileSheetOpen}
@@ -1175,7 +1179,7 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
             <Select value={form.employee} onChange={(event) => setForm({ ...form, employee: event.target.value })} options={employeeList} />
           </Field>
           <Field label="Товар" hint="Что продано">
-            <Select value={form.product} onChange={(event) => { const product = getProduct(event.target.value); updateForm({ product: event.target.value, gram: String(product?.grams?.[0] || 1) }); }} options={products.map((product) => product.name)} />
+            <Select value={form.product} onChange={(event) => { const product = getProduct(event.target.value); updateForm({ product: event.target.value, gram: String(product?.grams?.[0] || 1) }); }} options={activeProducts().map((product) => product.name)} />
           </Field>
           <Field label="Граммовка" hint="Сколько списать со склада">
             <Select value={form.gram} onChange={(event) => updateForm({ gram: event.target.value })} options={availableGrams.map(String)} />
@@ -1203,7 +1207,7 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
           {form.compensationType === "Замена товаром" && (
             <>
               <Field label="Товар замены" hint="Что выдали">
-                <Select value={form.replacementProduct} onChange={(event) => { const product = getProduct(event.target.value); setForm({ ...form, replacementProduct: event.target.value, replacementGram: String(product?.grams?.[0] || 1) }); }} options={products.map((product) => product.name)} />
+                <Select value={form.replacementProduct} onChange={(event) => { const product = getProduct(event.target.value); setForm({ ...form, replacementProduct: event.target.value, replacementGram: String(product?.grams?.[0] || 1) }); }} options={activeProducts().map((product) => product.name)} />
               </Field>
               <Field label="Фасовка замены" hint="Списывается со склада">
                 <Select value={form.replacementGram} onChange={(event) => setForm({ ...form, replacementGram: event.target.value })} options={(getProduct(form.replacementProduct)?.grams || []).map(String)} />
@@ -1266,7 +1270,7 @@ function Inventory({ data, stockForm, setStockForm, courierStock, setCourierStoc
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <Select value={stockForm.city} onChange={(event) => setStockForm({ ...stockForm, city: event.target.value })} options={cities} />
           <Select value={stockForm.employee} onChange={(event) => setStockForm({ ...stockForm, employee: event.target.value })} options={employeeList} />
-          <Select value={stockForm.product} onChange={(event) => { const product = getProduct(event.target.value); setStockForm({ ...stockForm, product: event.target.value, gram: String(product?.grams?.[0] || 1) }); }} options={products.map((product) => product.name)} />
+          <Select value={stockForm.product} onChange={(event) => { const product = getProduct(event.target.value); setStockForm({ ...stockForm, product: event.target.value, gram: String(product?.grams?.[0] || 1) }); }} options={activeProducts().map((product) => product.name)} />
           <Select value={stockForm.gram} onChange={(event) => setStockForm({ ...stockForm, gram: event.target.value })} options={grams.map(String)} />
           <Input value={stockForm.qty} onChange={(event) => setStockForm({ ...stockForm, qty: event.target.value })} placeholder="Кол-во" />
         </div>
@@ -1923,11 +1927,19 @@ function StaffNotes({ notes, noteForm, setNoteForm, addStaffNote, deleteStaffNot
   );
 }
 
-function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, productCommissions, setProductCommissions, employeeList }) {
+function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, productCommissions, setProductCommissions, employeeList, sales = [] }) {
   const [selectedCity, setSelectedCity] = useState(cities[0]);
   const [newCity, setNewCity] = useState("");
   const [newGram, setNewGram] = useState("");
   const [newProduct, setNewProduct] = useState("");
+
+  const activeProductList = activeProducts();
+  const allGrams = Array.from(new Set(activeProductList.flatMap((product) => product.grams))).sort((a, b) => a - b);
+
+  function touchCatalog() {
+    setProductCosts((current) => ({ ...current }));
+    setPriceMap((current) => ({ ...current }));
+  }
 
   function addCity() {
     const city = newCity.trim();
@@ -1938,11 +1950,35 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
     setPriceMap((current) => ({ ...current, [city]: {} }));
   }
 
+  function deleteCity(city) {
+    const usedInSales = sales.some((sale) => sale.city === city);
+    if (usedInSales) {
+      window.alert(`Город "${city}" уже есть в продажах. Удалять нельзя, чтобы не сломать старую статистику.`);
+      return;
+    }
+
+    const ok = window.confirm(`Удалить город "${city}"?`);
+    if (!ok) return;
+
+    const index = cities.indexOf(city);
+    if (index >= 0) cities.splice(index, 1);
+
+    setPriceMap((current) => {
+      const next = { ...current };
+      delete next[city];
+      return next;
+    });
+
+    if (selectedCity === city) {
+      setSelectedCity(cities[0] || "");
+    }
+  }
+
   function addGram() {
     const gram = Number(String(newGram).replace(",", "."));
     if (!gram || gram <= 0) return;
 
-    products.forEach((product) => {
+    activeProductList.forEach((product) => {
       if (!product.grams.includes(gram)) {
         product.grams.push(gram);
         product.grams.sort((a, b) => a - b);
@@ -1953,10 +1989,38 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
     setPriceMap((current) => ({ ...current }));
   }
 
+  function deleteGram(gram) {
+    const usedInSales = sales.some((sale) => Number(sale.gram) === Number(gram));
+    if (usedInSales) {
+      window.alert(`Фасовка ${gram} г уже есть в продажах. Удалять нельзя, чтобы не сломать старую статистику.`);
+      return;
+    }
+
+    const ok = window.confirm(`Удалить фасовку ${gram} г у всех товаров?`);
+    if (!ok) return;
+
+    products.forEach((product) => {
+      product.grams = product.grams.filter((item) => Number(item) !== Number(gram));
+    });
+
+    setPriceMap((current) => {
+      const next = { ...current };
+      Object.keys(next).forEach((city) => {
+        Object.keys(next[city] || {}).forEach((productName) => {
+          next[city][productName] = { ...(next[city][productName] || {}) };
+          delete next[city][productName][gram];
+        });
+      });
+      return next;
+    });
+
+    touchCatalog();
+  }
+
   function addProduct() {
     const name = newProduct.trim();
-    if (!name || products.some((product) => product.name === name)) return;
-    const grams = Array.from(new Set(products.flatMap((product) => product.grams))).sort((a, b) => a - b);
+    if (!name || products.some((product) => product.name === name && !product.archived)) return;
+    const grams = Array.from(new Set(activeProductList.flatMap((product) => product.grams))).sort((a, b) => a - b);
     products.push({ name, costPerGram: 0, stock: 0, grams: grams.length ? grams : [0.5, 1, 2, 3, 5] });
     setProductCosts({ ...productCosts, [name]: 0 });
     setProductCommissions({ ...productCommissions, [name]: 0 });
@@ -1964,15 +2028,31 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
   }
 
   function deleteProduct(index) {
-    const product = products[index];
+    const product = activeProductList[index];
     if (!product) return;
+
+    const usedInSales = sales.some(
+      (sale) => sale.product === product.name || sale.replacementProduct === product.name
+    );
+
+    if (usedInSales) {
+      const ok = window.confirm(
+        `Товар "${product.name}" уже есть в продажах. Полностью удалить нельзя, но можно архивировать: он исчезнет из новых продаж, а старая статистика сохранится. Архивировать?`
+      );
+      if (!ok) return;
+
+      const realIndex = products.findIndex((item) => item.name === product.name);
+      if (realIndex >= 0) products[realIndex] = { ...products[realIndex], archived: true };
+      touchCatalog();
+      return;
+    }
 
     const ok = window.confirm(`Удалить товар "${product.name}"?`);
     if (!ok) return;
 
     const deletedName = product.name;
-
-    products.splice(index, 1);
+    const realIndex = products.findIndex((item) => item.name === deletedName);
+    if (realIndex >= 0) products.splice(realIndex, 1);
 
     const nextCosts = { ...productCosts };
     delete nextCosts[deletedName];
@@ -1984,23 +2064,25 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
 
     setPriceMap((current) => {
       const next = { ...current };
-
       Object.keys(next).forEach((city) => {
         if (next[city]?.[deletedName]) {
           next[city] = { ...next[city] };
           delete next[city][deletedName];
         }
       });
-
       return next;
     });
   }
 
   function renameProduct(index, newName) {
-    const oldName = products[index]?.name;
+    const product = activeProductList[index];
+    const oldName = product?.name;
     if (oldName === undefined) return;
 
-    products[index].name = newName;
+    const realIndex = products.findIndex((item) => item.name === oldName);
+    if (realIndex < 0) return;
+
+    products[realIndex].name = newName;
 
     if (oldName && oldName !== newName) {
       const nextCosts = { ...productCosts, [newName]: productCosts[oldName] || 0 };
@@ -2045,18 +2127,18 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <DirectoryStat title="Сотрудников" value={employeeList.length} icon="👥" />
           <DirectoryStat title="Городов" value={cities.length} icon="🏙️" />
-          <DirectoryStat title="Товаров" value={products.length} icon="📦" />
+          <DirectoryStat title="Товаров" value={activeProductList.length} icon="📦" />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 text-sm">
           <DirectoryBox title="Сотрудники" items={employeeList} />
           <DirectoryBox title="Города" items={cities} />
-          <DirectoryBox title="Товары" items={products.map((product) => `${product.name} · ${product.grams.join(" / ")} г`)} />
+          <DirectoryBox title="Товары" items={activeProductList.map((product) => `${product.name} · ${product.grams.join(" / ")} г`)} />
         </div>
       </Panel>
 
       <Panel title="Себестоимость и товары">
-        <p className="text-slate-400 text-sm mb-4">Добавляй товары, меняй названия и указывай себестоимость за 1г/ед. Она будет автоматически вычитаться из прибыли каждой продажи.</p>
+        <p className="text-slate-400 text-sm mb-4">Добавляй товары, меняй названия и указывай себестоимость за 1г/ед. Если товар уже использовался в продажах, он будет архивирован, а не удалён полностью.</p>
 
         <div className="rounded-3xl bg-white/5 border border-white/10 p-4 mb-4">
           <div className="text-sm font-bold mb-3">Добавить новый товар</div>
@@ -2067,15 +2149,21 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {products.map((product, index) => (
-            <div key={index} className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3 relative">
-              <button
-                onClick={() => deleteProduct(index)}
-                className="absolute top-3 right-3 w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition"
-                title="Удалить товар"
-              >
-                ✕
-              </button>
+          {activeProductList.map((product, index) => (
+            <div key={`${product.name}-${index}`} className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black">Товар #{index + 1}</div>
+                  <div className="text-xs text-slate-500">карточка товара</div>
+                </div>
+                <button
+                  onClick={() => deleteProduct(index)}
+                  className="shrink-0 rounded-xl bg-red-500/10 border border-red-500/25 text-red-300 px-3 py-2 text-xs hover:bg-red-500/20 transition"
+                >
+                  Удалить
+                </button>
+              </div>
+
               <div>
                 <div className="text-xs text-slate-500 mb-1">Название товара</div>
                 <Input
@@ -2102,6 +2190,7 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
               </div>
             </div>
           ))}
+          {!activeProductList.length && <div className="text-slate-400">Активных товаров пока нет</div>}
         </div>
       </Panel>
 
@@ -2125,28 +2214,46 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
               <Input value={newGram} onChange={(event) => setNewGram(event.target.value)} placeholder="Например: 10" />
               <button onClick={addGram} className="rounded-2xl bg-emerald-600 hover:bg-emerald-500 transition px-5 font-bold">+</button>
             </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {allGrams.map((gram) => (
+                <button
+                  key={gram}
+                  onClick={() => deleteGram(gram)}
+                  className="rounded-full bg-black/30 border border-white/10 px-3 py-2 text-xs text-slate-300 hover:border-red-400/40 hover:text-red-300 transition"
+                >
+                  {gram} г ×
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-5">
           <div className="rounded-3xl bg-black/25 border border-white/10 p-3 space-y-2 max-h-[620px] overflow-y-auto soft-scroll">
             {cities.map((city) => {
-              const filledCount = products.reduce((count, product) => {
+              const filledCount = activeProductList.reduce((count, product) => {
                 return count + product.grams.filter((gram) => Number(priceMap[city]?.[product.name]?.[gram] || 0) > 0).length;
               }, 0);
 
               return (
-                <button
-                  key={city}
-                  onClick={() => setSelectedCity(city)}
-                  className={`w-full rounded-2xl px-4 py-3 text-left transition border ${selectedCity === city ? "bg-blue-600/25 border-blue-400/40 text-white shadow-lg shadow-blue-600/10" : "bg-white/5 border-white/5 text-slate-300 hover:bg-white/10"}`}
-                >
-                  <div className="flex justify-between items-center gap-3">
-                    <span className="font-bold">{city}</span>
-                    <span className="text-xs rounded-full bg-black/30 border border-white/10 px-2 py-1">{filledCount}</span>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1">заполненных цен</div>
-                </button>
+                <div key={city} className={`rounded-2xl border transition ${selectedCity === city ? "bg-blue-600/25 border-blue-400/40 text-white shadow-lg shadow-blue-600/10" : "bg-white/5 border-white/5 text-slate-300 hover:bg-white/10"}`}>
+                  <button
+                    onClick={() => setSelectedCity(city)}
+                    className="w-full px-4 pt-3 text-left"
+                  >
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="font-bold">{city}</span>
+                      <span className="text-xs rounded-full bg-black/30 border border-white/10 px-2 py-1">{filledCount}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">заполненных цен</div>
+                  </button>
+                  <button
+                    onClick={() => deleteCity(city)}
+                    className="mx-4 mt-2 mb-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 px-3 py-1 text-xs hover:bg-red-500/20 transition"
+                  >
+                    Удалить город
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -2155,15 +2262,15 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-3xl bg-blue-600/10 border border-blue-400/20 p-4">
               <div>
                 <div className="text-slate-400 text-sm">Выбранный город</div>
-                <div className="text-2xl font-black">{selectedCity}</div>
+                <div className="text-2xl font-black">{selectedCity || "—"}</div>
               </div>
               <div className="text-sm text-slate-300">
-                Товары: {products.length} · Граммовки: {Array.from(new Set(products.flatMap((product) => product.grams))).sort((a, b) => a - b).join(" / ")}
+                Товары: {activeProductList.length} · Граммовки: {allGrams.join(" / ") || "—"}
               </div>
             </div>
 
             <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-              {products.map((product) => {
+              {activeProductList.map((product) => {
                 const filled = product.grams.filter((gram) => Number(priceMap[selectedCity]?.[product.name]?.[gram] || 0) > 0).length;
                 return (
                   <div key={product.name} className="rounded-3xl bg-white/5 border border-white/10 p-5 hover:border-blue-400/30 transition">
