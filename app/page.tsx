@@ -917,12 +917,8 @@ export default function Home() {
               <p className="text-slate-300 mt-2">Магазин: <span className="text-blue-200 font-bold">{activeStore}</span> · вот что происходит в системе сегодня</p>
             </div>
             <div className="flex gap-2 md:gap-3 items-center flex-wrap">
-              <div className="w-[calc(50%-4px)] sm:w-auto"><DateInput value={reportFrom} onChange={setReportFrom} /></div>
-              <div className="w-[calc(50%-4px)] sm:w-auto"><DateInput value={reportTo} onChange={setReportTo} /></div>
               <button onClick={exportReport} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-emerald-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-emerald-600/20 transition">📄 <span className="hidden sm:inline">Отчёт</span></button>
               <button onClick={resetMonthSales} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-red-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-red-600/20 transition">♻️ <span className="hidden sm:inline">Сброс</span></button>
-              <button onClick={() => setCommandOpen(true)} className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-3 md:px-4 py-3 text-xs md:text-sm hover:bg-blue-600/20 transition">⌘K</button>
-              <button className="rounded-2xl bg-black/45 backdrop-blur-xl border border-blue-400/20 px-4 py-3 text-sm hover:bg-blue-600/20 transition relative">🔔 <span className="absolute -top-2 -right-2 text-xs bg-red-500 px-2 py-0.5 rounded-full animate-pulse">5</span></button>
             </div>
             </header>
 
@@ -1153,10 +1149,6 @@ function Dashboard({ data, period, setPeriod, setSelectedSale, deleteSale, updat
         <Panel title="Топ сотрудников"><TopEmployees items={data.kpi.slice(0, 6)} /></Panel>
       </section>
 
-      <section className="grid grid-cols-1 2xl:grid-cols-[1.15fr_.85fr] gap-6">
-        <Panel title="График прибыли"><ProfitLineChart data={data.dayStats} /></Panel>
-        <Panel title="Динамика недели"><WeekDynamics data={data.dayStats} /></Panel>
-      </section>
     </div>
   );
 }
@@ -2312,18 +2304,8 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
 }
 
 function RightPanel({ data }) {
-  const low = data.stock.filter((item) => item.left < 20);
   return (
     <aside className="space-y-4">
-      <Panel title="Быстрые действия">
-        <div className="grid grid-cols-2 gap-3">
-          <QuickAction icon="➕" text="Продажа" />
-          <QuickAction icon="📦" text="Склад" />
-          <QuickAction icon="📊" text="Отчёт" />
-          <QuickAction icon="🔔" text="Алерты" />
-        </div>
-      </Panel>
-
       <Panel title="Остатки на складе">
         <div className="space-y-3">
           {data.stock.map((item) => (
@@ -2336,14 +2318,6 @@ function RightPanel({ data }) {
         <button className="mt-4 w-full rounded-2xl bg-white/5 border border-white/10 py-3 text-sm hover:bg-white/10 transition">Перейти на склад</button>
       </Panel>
 
-      <Panel title="Live уведомления">
-        <div className="space-y-3">
-          <Notice tone="red" title="Критично низкий остаток" text={low[0] ? `${low[0].name}: осталось ${low[0].left} г` : "Пока всё стабильно"} />
-          <Notice tone="yellow" title="Контроль статусов" text="Проверь диспуты и потери за день" />
-          <Notice tone="blue" title="Новая операция" text={`Последняя: ${data.rows[0]?.city || "—"}, ${data.rows[0]?.product || "—"}`} />
-          <Notice tone="green" title="План выполнен" text="Лучший сотрудник: Иван" />
-        </div>
-      </Panel>
     </aside>
   );
 }
