@@ -2442,29 +2442,24 @@ function Input(props) {
 }
 
 function DateInput({ value, onChange }) {
-  const [display, setDisplay] = useState(formatDateRu(value));
-
-  useEffect(() => {
-    setDisplay(formatDateRu(value));
-  }, [value]);
-
-  function handleChange(event) {
-    const nextDisplay = normalizeDateInput(event.target.value);
-    setDisplay(nextDisplay);
-    const iso = displayDateToIso(nextDisplay);
-    if (iso) onChange(iso);
-  }
-
   function setToday() {
     const today = localDateKey();
-    setDisplay(formatDateRu(today));
     onChange(today);
   }
 
   return (
     <div className="relative">
-      <Input value={display} onChange={handleChange} placeholder="дд.мм.гггг" inputMode="numeric" maxLength={10} className="pr-24" />
-      <button type="button" onClick={setToday} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition">
+      <input
+        type="date"
+        value={value || localDateKey()}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl bg-black/35 border border-white/10 px-4 py-3 text-white outline-none focus:border-blue-400 backdrop-blur-xl pr-24"
+      />
+      <button
+        type="button"
+        onClick={setToday}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition"
+      >
         Сегодня
       </button>
     </div>
@@ -2492,14 +2487,24 @@ function TimeInput({ value, onChange }) {
 
   return (
     <div className="relative">
-      <Input value={display} onChange={handleChange} placeholder="чч:мм" inputMode="numeric" maxLength={5} className="pr-24" />
-      <button type="button" onClick={setNow} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition">
+      <Input
+        value={display}
+        onChange={handleChange}
+        placeholder="чч:мм"
+        inputMode="numeric"
+        maxLength={5}
+        className="pr-24"
+      />
+      <button
+        type="button"
+        onClick={setNow}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition"
+      >
         Сейчас
       </button>
     </div>
   );
 }
-
 function Select({ options, ...props }) {
   return (
     <select {...props} className="w-full rounded-2xl bg-black/50 border border-white/10 px-4 py-3 text-white outline-none focus:border-blue-400 backdrop-blur-xl">
@@ -2911,7 +2916,6 @@ function OperationsTable({ rows, compact, setSelectedSale, deleteSale, updateSal
     </Panel>
   );
 }
-
 function Progress({ value, color }) {
   const className = color === "red" ? "bg-red-500" : color === "green" ? "bg-emerald-500" : color === "yellow" ? "bg-yellow-500" : "bg-blue-500";
   return (
