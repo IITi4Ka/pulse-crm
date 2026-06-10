@@ -2846,10 +2846,11 @@ function OperationsTable({ rows, compact, setSelectedSale, deleteSale, updateSal
   return (
     <Panel title="Последние продажи">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead>
             <tr className="text-slate-400 border-b border-white/10">
-              <th className="text-left py-3">Время</th>
+              <th className="text-left py-3">Дата</th>
+              <th>Время</th>
               <th>Город</th>
               <th>Товар</th>
               <th>Граммовка</th>
@@ -2868,7 +2869,8 @@ function OperationsTable({ rows, compact, setSelectedSale, deleteSale, updateSal
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} onClick={() => setSelectedSale?.(row)} className="border-b border-white/5 hover:bg-white/5 transition cursor-pointer">
-                <td className="py-3">{row.time || "—"}</td>
+                <td className="py-3 text-left">{formatDateRu(row.date) || row.date || "—"}</td>
+                <td className="text-center">{row.time || "—"}</td>
                 <td className="text-center">{row.city}</td>
                 <td className="text-center">{row.product}</td>
                 <td className="text-center">{row.gram} г</td>
