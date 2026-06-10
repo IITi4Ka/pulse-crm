@@ -605,7 +605,6 @@ export default function Home() {
       const profit = revenue - cost - courierPayout - platformCommission - totalCompensation;
       const employeeBalance = isLoss(sale.status) ? -cost : courierPayout;
       return { ...sale, cost, revenue, courierPayout, platformCommissionPercent, platformCommission, compensationAmount, replacementCost, totalCompensation, profit, employeeBalance };
-      return { ...sale, cost, revenue, courierPayout, compensationAmount, replacementCost, totalCompensation, profit, employeeBalance };
     });
 
     const rows = calculatedRows.filter((row) => {
@@ -786,18 +785,23 @@ export default function Home() {
       cash: [6, 8, 7, 9, 12, 10, Math.max(1, Math.round(Math.abs(netCash) / 1000))],
     };
 
-    const dayStats = ["2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21"].map((day) => {
+    const chartDaysCount = period === "30 дней" ? 30 : period === "Месяц" ? 31 : 7;
+    const dayStats = Array.from({ length: chartDaysCount }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (chartDaysCount - 1 - index));
+      const day = localDateKey(date);
       const own = rows.filter((row) => row.date === day);
+
       return {
-        day: day.slice(5),
-        revenue: own.reduce((sum, row) => sum + row.revenue, 0),
-        profit: own.reduce((sum, row) => sum + row.profit, 0),
+        day: formatDateRu(day).slice(0, 5),
+        revenue: own.reduce((sum, row) => sum + Number(row.revenue || 0), 0),
+        profit: own.reduce((sum, row) => sum + Number(row.profit || 0), 0),
         orders: own.length,
       };
     });
 
     return { rows, revenue, cost, profit, totalCourierPayouts, totalPlatformCommission, roi, totalExpenses, netCash, losses, successRate, todayRevenue, todaySalesCount, metricSeries, stock, stockHistory, kpi, cityStats, productStats, statusStats, problemRows, problemLosses, replacementLosses, compensationLosses, problemEmployees, problemCities, dayStats, expenses, payouts, courierStock };
-  }, [sales, filters, expenses, payouts, courierStock, employeeList, productCosts, productCommissions]);
+  }, [sales, filters, expenses, payouts, courierStock, employeeList, productCosts, productCommissions, period]);
 
   if (!currentUser) {
     return (
@@ -1157,11 +1161,11 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
   return (
     <div className="space-y-6">
       <Panel title="Быстрый ввод операции">
-        <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-5 gap-3">
-          <Field label="Дата" hint="День операции">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Field label="Дата" hint="Выбери день операции">
             <DateInput value={form.date} onChange={(value) => setForm({ ...form, date: value })} />
           </Field>
-          <Field label="Время" hint="Когда была операция">
+          <Field label="Время" hint="Выбери время операции">
             <TimeInput value={form.time} onChange={(value) => setForm({ ...form, time: value })} />
           </Field>
           <Field label="Город" hint="Где была продажа">
@@ -1170,6 +1174,7 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
           <Field label="Сотрудник" hint="Кто отвечает">
             <Select value={form.employee} onChange={(event) => setForm({ ...form, employee: event.target.value })} options={employeeList} />
           </Field>
+
           <Field label="Товар" hint="Что продано">
             <Select value={form.product} onChange={(event) => { const product = getProduct(event.target.value); updateForm({ product: event.target.value, gram: String(product?.grams?.[0] || 1) }); }} options={activeProducts().map((product) => product.name)} />
           </Field>
@@ -1182,15 +1187,17 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
           <Field label="Выплата курьеру" hint="Вычитается из прибыли">
             <Input value={form.courierPayout} onChange={(event) => setForm({ ...form, courierPayout: event.target.value })} placeholder="Выплата курьеру" />
           </Field>
+
           <Field label="Статус" hint="Итог операции">
             <Select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} options={statuses} />
-          </Field>
-          <Field label="Заметка" hint="Комментарий к операции">
-            <Input value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Например: скидка, замена, долг..." />
           </Field>
           <Field label="Компенсация" hint="Скидка или замена">
             <Select value={form.compensationType} onChange={(event) => setForm({ ...form, compensationType: event.target.value })} options={compensationTypes} />
           </Field>
+          <Field label="Заметка" hint="Комментарий к операции">
+            <Input value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Например: скидка, замена, долг..." />
+          </Field>
+
           {form.compensationType === "Ручная компенсация" && (
             <Field label="Сумма компенсации" hint="Вычитается из прибыли">
               <Input value={form.compensationAmount} onChange={(event) => setForm({ ...form, compensationAmount: event.target.value })} placeholder="0" />
@@ -1207,8 +1214,11 @@ function Sales({ data, form, updateForm, setForm, addSale, availableGrams, setSe
             </>
           )}
         </div>
-        <button onClick={addSale} className="mt-4 rounded-2xl bg-blue-600 hover:bg-blue-500 transition px-6 py-3 font-bold shadow-lg shadow-blue-600/25">Добавить операцию</button>
-        <p className="text-slate-400 text-sm mt-3">Цена подтягивается по городу, товару и граммовке. Прибыль считается так: цена продажи − себестоимость − выплата курьеру.</p>
+
+        <div className="mt-5 flex flex-col sm:flex-row sm:items-center gap-3">
+          <button onClick={addSale} className="rounded-2xl bg-blue-600 hover:bg-blue-500 transition px-6 py-3 font-bold shadow-lg shadow-blue-600/25">Добавить операцию</button>
+          <p className="text-slate-400 text-sm">Цена подтягивается по городу, товару и граммовке. Прибыль считается так: цена продажи − себестоимость − выплата курьеру.</p>
+        </div>
       </Panel>
       <OperationsTable rows={data.rows} setSelectedSale={setSelectedSale} deleteSale={deleteSale} updateSaleNote={updateSaleNote} />
     </div>
@@ -2442,69 +2452,105 @@ function Input(props) {
 }
 
 function DateInput({ value, onChange }) {
+  const pickerRef = React.useRef(null);
+  const currentValue = value || localDateKey();
+
+  function openPicker() {
+    const picker = pickerRef.current;
+    if (!picker) return;
+    if (typeof picker.showPicker === "function") picker.showPicker();
+    else picker.click();
+  }
+
   function setToday() {
-    const today = localDateKey();
-    onChange(today);
+    onChange(localDateKey());
   }
 
   return (
-    <div className="relative">
-      <input
-        type="date"
-        value={value || localDateKey()}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl bg-black/35 border border-white/10 px-4 py-3 text-white outline-none focus:border-blue-400 backdrop-blur-xl pr-24"
-      />
+    <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+      <button
+        type="button"
+        onClick={openPicker}
+        className="text-left rounded-2xl bg-black/35 border border-white/10 px-4 py-3 text-white outline-none hover:border-blue-400 focus:border-blue-400 backdrop-blur-xl transition"
+      >
+        {formatDateRu(currentValue) || "Выбрать дату"}
+      </button>
+      <button
+        type="button"
+        onClick={openPicker}
+        className="rounded-2xl bg-blue-600/20 border border-blue-400/30 px-4 py-3 text-blue-200 hover:bg-blue-600/30 transition whitespace-nowrap"
+      >
+        📅 Выбрать
+      </button>
       <button
         type="button"
         onClick={setToday}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition"
+        className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-slate-200 hover:bg-white/10 transition whitespace-nowrap"
       >
         Сегодня
       </button>
+      <input
+        ref={pickerRef}
+        type="date"
+        value={currentValue}
+        onChange={(event) => onChange(event.target.value)}
+        className="sr-only"
+        tabIndex={-1}
+      />
     </div>
   );
 }
 
 function TimeInput({ value, onChange }) {
-  const [display, setDisplay] = useState(value || localTimeKey());
+  const pickerRef = React.useRef(null);
+  const currentValue = value || localTimeKey();
 
-  useEffect(() => {
-    setDisplay(value || "");
-  }, [value]);
-
-  function handleChange(event) {
-    const nextDisplay = normalizeTimeInput(event.target.value);
-    setDisplay(nextDisplay);
-    if (nextDisplay.length === 5) onChange(nextDisplay);
+  function openPicker() {
+    const picker = pickerRef.current;
+    if (!picker) return;
+    if (typeof picker.showPicker === "function") picker.showPicker();
+    else picker.click();
   }
 
   function setNow() {
-    const now = localTimeKey();
-    setDisplay(now);
-    onChange(now);
+    onChange(localTimeKey());
   }
 
   return (
-    <div className="relative">
-      <Input
-        value={display}
-        onChange={handleChange}
-        placeholder="чч:мм"
-        inputMode="numeric"
-        maxLength={5}
-        className="pr-24"
-      />
+    <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+      <button
+        type="button"
+        onClick={openPicker}
+        className="text-left rounded-2xl bg-black/35 border border-white/10 px-4 py-3 text-white outline-none hover:border-emerald-400 focus:border-emerald-400 backdrop-blur-xl transition"
+      >
+        {currentValue || "Выбрать время"}
+      </button>
+      <button
+        type="button"
+        onClick={openPicker}
+        className="rounded-2xl bg-emerald-600/20 border border-emerald-400/30 px-4 py-3 text-emerald-200 hover:bg-emerald-600/30 transition whitespace-nowrap"
+      >
+        🕒 Выбрать
+      </button>
       <button
         type="button"
         onClick={setNow}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-blue-600/20 border border-blue-400/20 px-3 py-2 text-xs text-blue-200 hover:bg-blue-600/30 transition"
+        className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-slate-200 hover:bg-white/10 transition whitespace-nowrap"
       >
         Сейчас
       </button>
+      <input
+        ref={pickerRef}
+        type="time"
+        value={currentValue}
+        onChange={(event) => onChange(event.target.value)}
+        className="sr-only"
+        tabIndex={-1}
+      />
     </div>
   );
 }
+
 function Select({ options, ...props }) {
   return (
     <select {...props} className="w-full rounded-2xl bg-black/50 border border-white/10 px-4 py-3 text-white outline-none focus:border-blue-400 backdrop-blur-xl">
