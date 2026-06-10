@@ -1058,14 +1058,14 @@ function AuthScreen({ authMode, setAuthMode, authForm, setAuthForm, loginUser, r
         <div className="space-y-3">
           {isRegister && (
             <Field label="Имя" hint="владелец аккаунта">
-              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="" />
+              <Input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Например: Admin" />
             </Field>
           )}
           <Field label="Email" hint="для входа">
-            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="" />
+            <Input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="email@example.com" />
           </Field>
           <Field label="Пароль" hint="минимум 4 символа">
-            <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="" />
+            <Input type="password" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="••••••••" />
           </Field>
         </div>
 
@@ -1963,6 +1963,39 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
     setNewProduct("");
   }
 
+  function deleteProduct(index) {
+    const product = products[index];
+    if (!product) return;
+
+    const ok = window.confirm(`Удалить товар "${product.name}"?`);
+    if (!ok) return;
+
+    const deletedName = product.name;
+
+    products.splice(index, 1);
+
+    const nextCosts = { ...productCosts };
+    delete nextCosts[deletedName];
+    setProductCosts(nextCosts);
+
+    const nextCommissions = { ...productCommissions };
+    delete nextCommissions[deletedName];
+    setProductCommissions(nextCommissions);
+
+    setPriceMap((current) => {
+      const next = { ...current };
+
+      Object.keys(next).forEach((city) => {
+        if (next[city]?.[deletedName]) {
+          next[city] = { ...next[city] };
+          delete next[city][deletedName];
+        }
+      });
+
+      return next;
+    });
+  }
+
   function renameProduct(index, newName) {
     const oldName = products[index]?.name;
     if (oldName === undefined) return;
@@ -2035,7 +2068,14 @@ function Settings({ priceMap, setPriceMap, productCosts, setProductCosts, produc
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {products.map((product, index) => (
-            <div key={index} className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
+            <div key={index} className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3 relative">
+              <button
+                onClick={() => deleteProduct(index)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition"
+                title="Удалить товар"
+              >
+                ✕
+              </button>
               <div>
                 <div className="text-xs text-slate-500 mb-1">Название товара</div>
                 <Input
@@ -2865,3 +2905,4 @@ function DirectoryBox({ title, items }) {
     </div>
   );
 }
+
